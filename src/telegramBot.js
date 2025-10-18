@@ -5,16 +5,38 @@ const deepseekService = require('./services/deepseek');
 
 class TelegramBotHandler {
   constructor(options = {}) {
-    // Allow disabling polling for testing
-    const polling = options.polling !== false;
-    this.bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, { polling });
-    this.setupEventHandlers();
-    console.log('🤖 Thai Learning Bot started');
+    try {
+      console.log('🚀 Initializing Thai Learning Bot...');
+      console.log('🔑 Bot token present:', !!config.TELEGRAM_BOT_TOKEN);
+      console.log('🔑 Bot token length:', config.TELEGRAM_BOT_TOKEN ? config.TELEGRAM_BOT_TOKEN.length : 0);
+      
+      // Allow disabling polling for testing
+      const polling = options.polling !== false;
+      console.log('📡 Polling enabled:', polling);
+      
+      this.bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, { polling });
+      this.setupEventHandlers();
+      console.log('🤖 Thai Learning Bot started successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize bot:', error);
+      console.error('❌ Error details:', error.message);
+      console.error('❌ Error stack:', error.stack);
+      throw error;
+    }
   }
 
   setupEventHandlers() {
+    console.log('🔧 Setting up event handlers...');
+    
     // Handle callback queries (button clicks) - HIGHEST PRIORITY
-    this.bot.on('callback_query', (callbackQuery) => this.handleCallbackQuery(callbackQuery));
+    this.bot.on('callback_query', (callbackQuery) => {
+      console.log(`🔘 Callback query received: ${callbackQuery.data} from user ${callbackQuery.from.id}`);
+      this.handleCallbackQuery(callbackQuery).catch(error => {
+        console.error('❌ Error in callback query handler:', error);
+        console.error('❌ Callback data:', callbackQuery.data);
+        console.error('❌ User ID:', callbackQuery.from.id);
+      });
+    });
     
     // Handle successful payments
     this.bot.on('pre_checkout_query', (preCheckoutQuery) => this.handlePreCheckoutQuery(preCheckoutQuery));
@@ -212,29 +234,62 @@ class TelegramBotHandler {
 
   async handleSubscribe(chatId, userId) {
     try {
+      console.log(`💎 Starting subscription process for user ${userId}`);
+      
+      // Check if user already has active subscription
+      const existingSubscription = await database.getActiveSubscription(userId.toString());
+      if (existingSubscription) {
+        console.log(`⚠️ User ${userId} already has active subscription`);
+        await this.bot.sendMessage(chatId, '✅ You already have an active subscription!');
+        return;
+      }
+      
+      // Generate TON deep link for payment
       const tonAmount = Math.floor(config.TON_AMOUNT * 1000000000); // Convert to nanoTON
       const paymentReference = `thai-bot-${userId}-${Date.now()}`;
       
-      console.log(`💎 Creating Telegram invoice for user ${userId}`);
+      console.log(`💎 Creating TON payment link for user ${userId}`);
+      console.log(`💰 Amount: ${config.TON_AMOUNT} TON (${tonAmount} nanoTON)`);
+      console.log(`🔗 Reference: ${paymentReference}`);
       
-      // Create Telegram invoice using Payments API
-      const invoice = {
-        title: "Thai Learning Bot Subscription",
-        description: "30 days of daily Thai lessons with AI-generated content",
-        payload: paymentReference,
-        provider_token: "TON", // TON payment provider
-        currency: "TON",
-        prices: [
-          { label: "Subscription", amount: tonAmount }
-        ],
-        start_parameter: paymentReference
+      // Create TON deep link
+      const tonDeepLink = `ton://transfer/${config.TON_ADDRESS}?amount=${tonAmount}&text=${paymentReference}`;
+      console.log(`🔗 TON Deep Link: ${tonDeepLink}`);
+      
+      // Create payment button
+      const keyboard = {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '💎 Pay 1 TON', url: tonDeepLink }],
+            [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+          ]
+        }
       };
-
-      await this.bot.sendInvoice(chatId, invoice);
       
-      console.log(`✅ Invoice sent to user ${userId}`);
+      const message = `💎 **Subscribe to Thai Learning Bot**
+      
+💰 **Cost:** 1 TON (≈ $2.50)
+📅 **Duration:** 30 days
+🎯 **What you get:**
+• Daily Thai lessons with AI-generated content
+• Word-by-word breakdowns with pronunciation
+• Progress tracking
+• Difficulty level customization
+
+💳 **To subscribe:**
+1. Click "Pay 1 TON" below
+2. Complete payment in your TON wallet
+3. Return to this chat for confirmation
+
+⚠️ **Important:** Keep this chat open during payment!`;
+
+      await this.bot.sendMessage(chatId, message, keyboard);
+      console.log(`✅ Payment link sent to user ${userId}`);
+      
     } catch (error) {
       console.error('❌ Error in handleSubscribe:', error);
+      console.error('❌ Error details:', error.message);
+      console.error('❌ Error stack:', error.stack);
       await this.bot.sendMessage(chatId, '❌ Sorry, something went wrong with payment. Please try again.');
     }
   }
