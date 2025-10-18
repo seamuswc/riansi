@@ -484,15 +484,36 @@ class TelegramBotHandler {
         const transactions = response.data.transactions || [];
         let paymentFound = false;
         
+        console.log(`🔍 Searching ${transactions.length} transactions for reference: ${paymentData.reference}`);
+        
         for (const tx of transactions) {
-          if (tx.in_msg && tx.in_msg.msg_data && tx.in_msg.msg_data.text) {
-            const messageText = tx.in_msg.msg_data.text;
+          // Check in_msg for text comment
+          if (tx.in_msg && tx.in_msg.decoded_body && tx.in_msg.decoded_body.text) {
+            const messageText = tx.in_msg.decoded_body.text;
+            console.log(`📝 Checking transaction message: ${messageText}`);
             if (messageText.includes(paymentData.reference)) {
-              console.log(`✅ Payment found: ${paymentData.reference}`);
+              console.log(`✅ Payment found in in_msg: ${paymentData.reference}`);
               paymentFound = true;
               break;
             }
           }
+          
+          // Check out_msgs for text comment
+          if (tx.out_msgs && tx.out_msgs.length > 0) {
+            for (const outMsg of tx.out_msgs) {
+              if (outMsg.decoded_body && outMsg.decoded_body.text) {
+                const messageText = outMsg.decoded_body.text;
+                console.log(`📤 Checking out_msg: ${messageText}`);
+                if (messageText.includes(paymentData.reference)) {
+                  console.log(`✅ Payment found in out_msg: ${paymentData.reference}`);
+                  paymentFound = true;
+                  break;
+                }
+              }
+            }
+          }
+          
+          if (paymentFound) break;
         }
         
         if (paymentFound) {
@@ -728,3 +749,4 @@ Practice writing the Thai sentence!`;
 }
 
 module.exports = TelegramBotHandler;
+
