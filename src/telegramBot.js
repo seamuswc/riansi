@@ -55,9 +55,7 @@ class TelegramBotHandler {
       });
     });
     
-    // Handle successful payments
-    this.bot.on('pre_checkout_query', (preCheckoutQuery) => this.handlePreCheckoutQuery(preCheckoutQuery));
-    this.bot.on('successful_payment', (msg) => this.handleSuccessfulPayment(msg));
+    // Note: TON payments use deep links, not Telegram Payments API
     
     // Handle /start command
     this.bot.onText(/\/start/, (msg) => this.handleStart(msg));
@@ -191,6 +189,9 @@ class TelegramBotHandler {
           if (data.startsWith('level_')) {
             const level = parseInt(data.split('_')[1]);
             await this.handleSetLevel(chatId, userId, level);
+          } else if (data.startsWith('check_payment_')) {
+            const targetUserId = data.split('_')[2];
+            await this.handleCheckPayment(chatId, targetUserId);
           }
           break;
       }
@@ -270,29 +271,57 @@ class TelegramBotHandler {
         return;
       }
       
-      // Use Telegram Payments API with TON
+      // Generate TON deep link for payment
       const tonAmount = Math.floor(config.TON_AMOUNT * 1000000000); // Convert to nanoTON
       const paymentReference = `thai-bot-${userId}-${Date.now()}`;
       
-      console.log(`💎 Creating Telegram invoice for user ${userId}`);
+      console.log(`💎 Creating TON payment link for user ${userId}`);
       console.log(`💰 Amount: ${config.TON_AMOUNT} TON (${tonAmount} nanoTON)`);
       console.log(`🔗 Reference: ${paymentReference}`);
       
-      // Create Telegram invoice using Payments API
-      const invoice = {
-        title: "Thai Learning Bot Subscription",
-        description: "30 days of daily Thai lessons with AI-generated content",
-        payload: paymentReference,
-        provider_token: "TON", // TON payment provider
-        currency: "TON",
-        prices: [
-          { label: "Subscription", amount: tonAmount }
-        ],
-        start_parameter: paymentReference
+      // Create TON deep link
+      const tonDeepLink = `ton://transfer/${config.TON_ADDRESS}?amount=${tonAmount}&text=${paymentReference}`;
+      console.log(`🔗 TON Deep Link: ${tonDeepLink}`);
+      
+      // Store payment reference for verification
+      this.pendingPayments = this.pendingPayments || new Map();
+      this.pendingPayments.set(userId.toString(), {
+        reference: paymentReference,
+        amount: tonAmount,
+        timestamp: Date.now()
+      });
+      
+      // Create payment buttons
+      const keyboard = {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '💎 Pay 1 TON', url: tonDeepLink }],
+            [{ text: '✅ I Paid', callback_data: `check_payment_${userId}` }],
+            [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+          ]
+        }
       };
+      
+      const message = `💎 **Subscribe to Thai Learning Bot**
+      
+💰 **Cost:** 1 TON (≈ $2.50)
+📅 **Duration:** 30 days
+🎯 **What you get:**
+• Daily Thai lessons with AI-generated content
+• Word-by-word breakdowns with pronunciation
+• Progress tracking
+• Difficulty level customization
 
-      await this.bot.sendInvoice(chatId, invoice);
-      console.log(`✅ Invoice sent to user ${userId}`);
+💳 **To subscribe:**
+1. Click "Pay 1 TON" below
+2. Complete payment in your TON wallet
+3. Return to this chat and click "I Paid"
+4. We'll verify your payment instantly
+
+⚠️ **Important:** Keep this chat open during payment!`;
+
+      await this.bot.sendMessage(chatId, message, keyboard);
+      console.log(`✅ Payment link sent to user ${userId}`);
       
     } catch (error) {
       console.error('❌ Error in handleSubscribe:', error);
@@ -421,40 +450,101 @@ class TelegramBotHandler {
     }
   }
 
-  // Handle pre-checkout query (before payment)
-  async handlePreCheckoutQuery(preCheckoutQuery) {
+  async handleCheckPayment(chatId, userId) {
     try {
-      console.log('💳 Pre-checkout query received:', preCheckoutQuery);
+      console.log(`💳 Checking payment for user ${userId}`);
       
-      // Always approve the payment
-      await this.bot.answerPreCheckoutQuery(preCheckoutQuery.id, true);
+      // Check if we have pending payment data
+      if (!this.pendingPayments || !this.pendingPayments.has(userId.toString())) {
+        await this.bot.sendMessage(chatId, '❌ No pending payment found. Please try subscribing again.');
+        return;
+      }
       
-      console.log('✅ Pre-checkout query approved');
+      const paymentData = this.pendingPayments.get(userId.toString());
+      console.log(`🔍 Checking payment: ${paymentData.reference}`);
+      
+      // Send checking message
+      await this.bot.sendMessage(chatId, '🔍 Checking your payment... Please wait a moment.');
+      
+      try {
+        // Check TON blockchain for payment
+        const axios = require('axios');
+        const response = await axios.get(`https://tonapi.io/v2/blockchain/accounts/${config.TON_ADDRESS}/transactions`, {
+          headers: {
+            'Authorization': `Bearer ${config.TON_API_KEY}`
+          },
+          params: {
+            limit: 10
+          }
+        });
+        
+        console.log(`📊 TON API response: ${response.status}`);
+        
+        // Look for payment with matching reference
+        const transactions = response.data.transactions || [];
+        let paymentFound = false;
+        
+        for (const tx of transactions) {
+          if (tx.in_msg && tx.in_msg.msg_data && tx.in_msg.msg_data.text) {
+            const messageText = tx.in_msg.msg_data.text;
+            if (messageText.includes(paymentData.reference)) {
+              console.log(`✅ Payment found: ${paymentData.reference}`);
+              paymentFound = true;
+              break;
+            }
+          }
+        }
+        
+        if (paymentFound) {
+          // Payment confirmed - create subscription
+          await database.createSubscription(userId.toString(), paymentData.reference, config.SUBSCRIPTION_DAYS);
+          
+          // Remove from pending payments
+          this.pendingPayments.delete(userId.toString());
+          
+          // Send success message
+          const successMessage = `🎉 **Payment Confirmed!**
+          
+✅ Your subscription is now active!
+📅 You'll receive daily Thai lessons for 30 days
+🎯 Your first lesson is coming right up...`;
+          
+          const keyboard = {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+              ]
+            }
+          };
+          
+          await this.bot.sendMessage(chatId, successMessage, keyboard);
+          
+          // Send immediate lesson
+          await this.sendImmediateSentence(chatId, userId);
+          
+        } else {
+          // Payment not found
+          await this.bot.sendMessage(chatId, `❌ Payment not found. Please make sure you:
+          
+1. ✅ Completed the payment in your TON wallet
+2. ✅ Used the exact amount: 1 TON
+3. ✅ Included the reference: ${paymentData.reference}
+4. ✅ Wait a few minutes for blockchain confirmation
+
+Try clicking "I Paid" again in a few minutes.`);
+        }
+        
+      } catch (apiError) {
+        console.error('❌ TON API Error:', apiError.message);
+        await this.bot.sendMessage(chatId, '❌ Payment verification temporarily unavailable. Please try again in a few minutes.');
+      }
+      
     } catch (error) {
-      console.error('❌ Error in handlePreCheckoutQuery:', error);
-      await this.bot.answerPreCheckoutQuery(preCheckoutQuery.id, false, 'Payment verification failed');
+      console.error('❌ Error in handleCheckPayment:', error);
+      await this.bot.sendMessage(chatId, '❌ Sorry, something went wrong checking your payment. Please try again.');
     }
   }
 
-  // Handle successful payment
-  async handleSuccessfulPayment(msg) {
-    try {
-      const chatId = msg.chat.id;
-      const userId = msg.from.id;
-      const payment = msg.successful_payment;
-      
-      console.log('💰 Successful payment received:', payment);
-      
-      // Extract payment reference from payload
-      const paymentReference = payment.invoice_payload;
-      
-      // Process the payment success
-      await this.handlePaymentSuccess(chatId, userId, paymentReference);
-      
-    } catch (error) {
-      console.error('❌ Error in handleSuccessfulPayment:', error);
-    }
-  }
 
   async handleMessage(msg) {
     // Handle user responses to sentences
