@@ -4,8 +4,10 @@ const config = require('./config');
 const deepseekService = require('./services/deepseek');
 
 class TelegramBotHandler {
-  constructor() {
-    this.bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, { polling: true });
+  constructor(options = {}) {
+    // Allow disabling polling for testing
+    const polling = options.polling !== false;
+    this.bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, { polling });
     this.setupEventHandlers();
     console.log('🤖 Thai Learning Bot started');
   }

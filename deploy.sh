@@ -94,13 +94,35 @@ Environment=NODE_ENV=production
 WantedBy=multi-user.target
 EOL
 
+  # Stop any existing instances first
+  echo "🛑 Stopping any existing bot instances..."
+  pkill -f 'node.*src/index.js' || true
+  pkill -f 'node.*telegramBot' || true
+  sleep 2
+  
   # Reload systemd and start service
   systemctl daemon-reload
   systemctl enable $SERVICE_NAME
   systemctl restart $SERVICE_NAME
   
+  # Wait for service to start
+  sleep 3
+  
   # Check status
   systemctl status $SERVICE_NAME --no-pager
+  
+  # Verify only one instance is running
+  echo "🔍 Checking for multiple instances..."
+  INSTANCE_COUNT=\$(ps aux | grep 'src/index.js' | grep -v grep | wc -l)
+  if [ \$INSTANCE_COUNT -gt 1 ]; then
+    echo "⚠️  Warning: Multiple bot instances detected (\$INSTANCE_COUNT)"
+    echo "🛑 Stopping extra instances..."
+    pkill -f 'node.*src/index.js'
+    sleep 2
+    systemctl restart $SERVICE_NAME
+  else
+    echo "✅ Single bot instance confirmed"
+  fi
   
   echo "✅ Deployment completed!"
   echo "📊 Service status:"
