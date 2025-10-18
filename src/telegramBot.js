@@ -229,7 +229,7 @@ class TelegramBotHandler {
       }
       
       statusMessage += `Current Level: ${user.difficulty_level} (${levelName})\n\n`;
-      statusMessage += `Your daily lessons continue at 9:00 AM ICT.`;
+      statusMessage += `Your daily lessons continue at 9:00 AM Bangkok time.`;
 
       // Create keyboard based on subscription status
       let keyboard;
