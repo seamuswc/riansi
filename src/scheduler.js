@@ -89,7 +89,7 @@ class Scheduler {
 📝 **Thai Sentence:**
 ${sentenceData.thai_text}
 
-🎯 **Your task:** Try typing the sentence back in Thai!${wordBreakdown}
+Try typing the sentence back in Thai!${wordBreakdown}
 
 Practice writing the Thai sentence!`;
 

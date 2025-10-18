@@ -309,7 +309,6 @@ class TelegramBotHandler {
 🎯 **What you get:**
 • Daily Thai lessons with AI-generated content
 • Word-by-word breakdowns with pronunciation
-• Progress tracking
 • Difficulty level customization
 
 💳 **To subscribe:**
@@ -680,7 +679,7 @@ Here's your first lesson:`;
 📝 **Thai Sentence:**
 ${sentenceData.thai_text}
 
-🎯 **Your task:** Try typing the sentence back in Thai!${wordBreakdown}
+Try typing the sentence back in Thai!${wordBreakdown}
 
 Practice writing the Thai sentence!`;
 
