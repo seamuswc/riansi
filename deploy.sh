@@ -38,21 +38,26 @@ ssh root@$SERVER_IP << EOF
   # Create data directory
   mkdir -p data
   
-  # Set up environment with correct values
-  cat > .env << 'EOL'
+  # Set up environment - copy from local .env if it exists
+  if [ -f .env ]; then
+    echo "📋 Copying local .env file..."
+    cp .env .env.backup
+  else
+    echo "⚠️  No local .env file found. Creating from template..."
+    cat > .env << 'EOL'
 # Telegram Bot Configuration
-TELEGRAM_BOT_TOKEN=8053977448:AAGYMekyUQWu69XIidY99QklyopbtoMsX3s
+TELEGRAM_BOT_TOKEN=your-telegram-bot-token
 
 # DeepSeek API
-DEEPSEEK_API_KEY=sk-f91298950aea4fd2908881ef26ae2946
+DEEPSEEK_API_KEY=your-deepseek-api-key
 
 # TON Configuration
-TON_ADDRESS=UQBDTEPa2TsufNyTFvpydJH07AlOt48cB7Nyq6rFZ7p6e-wt
+TON_ADDRESS=your-ton-address
 TON_AMOUNT=1.0
 SUBSCRIPTION_DAYS=30
 
 # TON Console API Key
-TON_API_KEY=AHCEM75H2E5ZTNQAAAAL6ZZYOWV5NT73AXDA6J55UBGVEFJNKPX6KEQUYYV7NNKQXD4BJPA
+TON_API_KEY=your-ton-console-api-key
 
 # Webhook Configuration
 WEBHOOK_BASE_URL=http://68.183.185.81:3000
@@ -67,6 +72,8 @@ NODE_ENV=production
 # Timezone
 TIMEZONE=Asia/Bangkok
 EOL
+    echo "⚠️  Please update .env file with your actual API keys!"
+  fi
   
   # Create systemd service
   cat > /etc/systemd/system/$SERVICE_NAME.service << EOL

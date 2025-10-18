@@ -2,14 +2,14 @@ require('dotenv').config();
 
 module.exports = {
   // Telegram Bot Configuration
-  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '8053977448:AAGYMekyUQWu69XIidY99QklyopbtoMsX3s',
+  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
   
   // DeepSeek API
-  DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY || 'sk-f91298950aea4fd2908881ef26ae2946',
+  DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY,
   DEEPSEEK_API_URL: 'https://api.deepseek.com/v1/chat/completions',
   
   // TON API
-  TON_API_KEY: process.env.TON_API_KEY || 'AHCEM75H2E5ZTNQAAAAL6ZZYOWV5NT73AXDA6J55UBGVEFJNKPX6KEQUYYV7NNKQXD4BJPA',
+  TON_API_KEY: process.env.TON_API_KEY,
   
   // TON Configuration
   TON_ADDRESS: process.env.TON_ADDRESS || 'UQBDTEPa2TsufNyTFvpydJH07AlOt48cB7Nyq6rFZ7p6e-wt',
