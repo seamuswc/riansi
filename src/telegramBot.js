@@ -15,6 +15,11 @@ class TelegramBotHandler {
       console.log('📡 Polling enabled:', polling);
       
       this.bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, { polling });
+      
+      // Add deduplication tracking
+      this.processedCallbacks = new Set();
+      this.processedMessages = new Set();
+      
       this.setupEventHandlers();
       console.log('🤖 Thai Learning Bot started successfully');
     } catch (error) {
@@ -30,11 +35,23 @@ class TelegramBotHandler {
     
     // Handle callback queries (button clicks) - HIGHEST PRIORITY
     this.bot.on('callback_query', (callbackQuery) => {
+      const callbackId = `${callbackQuery.id}_${callbackQuery.data}`;
+      
+      // Check for duplicate processing
+      if (this.processedCallbacks.has(callbackId)) {
+        console.log(`⚠️ Duplicate callback ignored: ${callbackQuery.data}`);
+        return;
+      }
+      
+      this.processedCallbacks.add(callbackId);
       console.log(`🔘 Callback query received: ${callbackQuery.data} from user ${callbackQuery.from.id}`);
+      
       this.handleCallbackQuery(callbackQuery).catch(error => {
         console.error('❌ Error in callback query handler:', error);
         console.error('❌ Callback data:', callbackQuery.data);
         console.error('❌ User ID:', callbackQuery.from.id);
+        // Remove from processed set on error so it can be retried
+        this.processedCallbacks.delete(callbackId);
       });
     });
     
@@ -63,6 +80,15 @@ class TelegramBotHandler {
       
       // Only handle regular text messages
       if (msg.text) {
+        const messageId = `${msg.message_id}_${msg.from.id}`;
+        
+        // Check for duplicate processing
+        if (this.processedMessages.has(messageId)) {
+          console.log(`⚠️ Duplicate message ignored: ${msg.text.substring(0, 50)}...`);
+          return;
+        }
+        
+        this.processedMessages.add(messageId);
         this.handleMessage(msg);
       }
     });
@@ -244,47 +270,29 @@ class TelegramBotHandler {
         return;
       }
       
-      // Generate TON deep link for payment
+      // Use Telegram Payments API with TON
       const tonAmount = Math.floor(config.TON_AMOUNT * 1000000000); // Convert to nanoTON
       const paymentReference = `thai-bot-${userId}-${Date.now()}`;
       
-      console.log(`💎 Creating TON payment link for user ${userId}`);
+      console.log(`💎 Creating Telegram invoice for user ${userId}`);
       console.log(`💰 Amount: ${config.TON_AMOUNT} TON (${tonAmount} nanoTON)`);
       console.log(`🔗 Reference: ${paymentReference}`);
       
-      // Create TON deep link
-      const tonDeepLink = `ton://transfer/${config.TON_ADDRESS}?amount=${tonAmount}&text=${paymentReference}`;
-      console.log(`🔗 TON Deep Link: ${tonDeepLink}`);
-      
-      // Create payment button
-      const keyboard = {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '💎 Pay 1 TON', url: tonDeepLink }],
-            [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
-          ]
-        }
+      // Create Telegram invoice using Payments API
+      const invoice = {
+        title: "Thai Learning Bot Subscription",
+        description: "30 days of daily Thai lessons with AI-generated content",
+        payload: paymentReference,
+        provider_token: "TON", // TON payment provider
+        currency: "TON",
+        prices: [
+          { label: "Subscription", amount: tonAmount }
+        ],
+        start_parameter: paymentReference
       };
-      
-      const message = `💎 **Subscribe to Thai Learning Bot**
-      
-💰 **Cost:** 1 TON (≈ $2.50)
-📅 **Duration:** 30 days
-🎯 **What you get:**
-• Daily Thai lessons with AI-generated content
-• Word-by-word breakdowns with pronunciation
-• Progress tracking
-• Difficulty level customization
 
-💳 **To subscribe:**
-1. Click "Pay 1 TON" below
-2. Complete payment in your TON wallet
-3. Return to this chat for confirmation
-
-⚠️ **Important:** Keep this chat open during payment!`;
-
-      await this.bot.sendMessage(chatId, message, keyboard);
-      console.log(`✅ Payment link sent to user ${userId}`);
+      await this.bot.sendInvoice(chatId, invoice);
+      console.log(`✅ Invoice sent to user ${userId}`);
       
     } catch (error) {
       console.error('❌ Error in handleSubscribe:', error);
