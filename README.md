@@ -1,14 +1,13 @@
 # Thai Learning Telegram Bot
 
-A Telegram bot that helps users learn Thai language through daily sentences and AI-powered grading.
+A Telegram bot that helps users learn Thai language through daily sentences and authentic content.
 
 ## 🎯 Features
 
 - **Daily Thai Sentences**: Get daily lessons at 9:00 AM ICT
-- **AI-Powered Grading**: Uses fuzzy matching to grade user responses
 - **TON Cryptocurrency Payments**: Subscribe with TON for 30 days
 - **5 Difficulty Levels**: From Beginner to Expert
-- **Real-time Feedback**: Instant grading and feedback
+- **Authentic Content**: Practice with real Thai sentences
 
 ## 🏗️ Architecture
 

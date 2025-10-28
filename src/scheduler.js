@@ -73,7 +73,7 @@ class Scheduler {
       // Create word breakdown
       let wordBreakdown = '';
       if (sentenceData.word_breakdown && sentenceData.word_breakdown.length > 0) {
-        wordBreakdown = '\n\n📚 **Word Breakdown:**\n';
+        wordBreakdown = '\n\n📚 Word Breakdown:\n';
         for (const word of sentenceData.word_breakdown) {
           if (typeof word === 'object' && word.word && word.meaning) {
             const pinyin = word.pinyin || '';
@@ -86,7 +86,7 @@ class Scheduler {
 
       const message = `🇹🇭 Daily Thai Lesson
 
-📝 **Thai Sentence:**
+📝 Thai Sentence:
 ${sentenceData.thai_text}
 
 Try typing the sentence back in Thai!${wordBreakdown}

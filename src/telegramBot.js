@@ -135,8 +135,7 @@ class TelegramBotHandler {
 
 📖 How it works:
 • Get daily Thai sentences at 9:00 AM ICT
-• Reply with your translation
-• Get graded feedback instantly
+• Practice with authentic Thai content
 
 💰 Subscription: 1 TON for 30 days
 🎯 Difficulty: 5 levels (Beginner to Expert)
@@ -309,31 +308,16 @@ class TelegramBotHandler {
         }
       };
       
-      const message = `💎 **Subscribe to Thai Learning Bot**
-      
-💰 **Cost:** 1 TON (≈ $2.50) or 1 USDT (≈ $1.00)
-📅 **Duration:** 30 days
-🎯 **What you get:**
-• Daily Thai lessons with AI-generated content
+      const message = `💎 Subscribe to Thai Learning Bot
+
+💰 Cost: 1 TON (≈ $2.50) or 1 USDT (≈ $1.00)    
+📅 Duration: 30 days of daily lessons        
+🎯 What you get:
+• Daily Thai lessons
 • Word-by-word breakdowns with pronunciation
 • Difficulty level customization
 
-💳 **To subscribe:**
-1. Click your preferred payment method below
-2. Complete payment in your TON wallet
-3. Return to this chat and click "I Paid"
-4. We'll verify your payment instantly
-
-**Payment Options:**
-• **TON:** Native TON blockchain
-• **USDT:** Native USDT on TON (Jetton)
-
-📱 **Need a TON wallet?**
-• **Mobile:** Tonkeeper, TON Wallet
-• **Desktop:** Tonkeeper, MyTonWallet
-• **Web:** Tonkeeper Web
-
-⚠️ **Important:** Keep this chat open during payment!`;
+💳 Choose your payment method below!`;
 
       await this.bot.sendMessage(chatId, message, keyboard);
       console.log(`✅ Payment link sent to user ${userId}`);
@@ -589,11 +573,7 @@ class TelegramBotHandler {
           this.pendingPayments.delete(userId.toString());
           
           // Send success message
-          const successMessage = `🎉 **Payment Confirmed!**
-          
-✅ Your subscription is now active!
-📅 You'll receive daily Thai lessons for 30 days
-🎯 Your first lesson is coming right up...`;
+          const successMessage = `🎉 Payment confirmed! Subscription active for 30 days.`;
           
           const keyboard = {
             reply_markup: {
@@ -605,26 +585,9 @@ class TelegramBotHandler {
           
           await this.bot.sendMessage(chatId, successMessage, keyboard);
           
-          // Send immediate lesson
-          await this.sendImmediateSentence(chatId, userId);
-          
         } else {
           // Payment not found
-          await this.bot.sendMessage(chatId, `❌ Payment not found. Please check:
-
-**If you don't have a TON wallet:**
-• Install Tonkeeper or TON Wallet first
-• Then try the payment again
-
-**If you have a wallet:**
-1. ✅ Completed the payment in your TON wallet
-2. ✅ Used the exact amount: 1 TON or 1 USDT
-3. ✅ Included the reference: \`${paymentData.reference}\`
-4. ✅ Wait a few minutes for blockchain confirmation
-
-**Need help?**
-• Try clicking "I Paid" again in a few minutes
-• Make sure you're using a TON wallet (not other crypto wallets)`);
+          await this.bot.sendMessage(chatId, `❌ Payment not found. Try again in a few minutes.`);
         }
         
       } catch (apiError) {
@@ -708,61 +671,12 @@ Here's your first lesson:`;
 
       await this.bot.sendMessage(chatId, successMessage);
       
-      // Send immediate sentence
-      await this.sendImmediateSentence(chatId, userId);
-      
     } catch (error) {
       console.error('❌ Error in handlePaymentSuccess:', error);
       await this.bot.sendMessage(chatId, '❌ Payment processed but there was an error. Please contact support.');
     }
   }
 
-  // Send immediate sentence after payment
-  async sendImmediateSentence(chatId, userId) {
-    try {
-      // Get user's difficulty level
-      const user = await database.getUser(userId.toString());
-      if (!user) {
-        console.error('❌ User not found for immediate sentence');
-        return;
-      }
-
-      // Generate sentence based on user's difficulty level
-      const sentenceData = await this.generateSentence(user.difficulty_level);
-      
-      // Save sentence to database
-      const sentenceId = await this.saveSentence(sentenceData, user.difficulty_level);
-      
-      // Create word breakdown
-      let wordBreakdown = '';
-      if (sentenceData.word_breakdown && sentenceData.word_breakdown.length > 0) {
-        wordBreakdown = '\n\n📚 **Word Breakdown:**\n';
-        for (const word of sentenceData.word_breakdown) {
-          if (typeof word === 'object' && word.word && word.meaning) {
-            const pinyin = word.pinyin || '';
-            wordBreakdown += `${word.word} - ${word.meaning} - ${pinyin}\n`;
-          } else if (typeof word === 'string') {
-            wordBreakdown += `${word}\n`;
-          }
-        }
-      }
-
-      const message = `🇹🇭 Your First Thai Lesson
-
-📝 **Thai Sentence:**
-${sentenceData.thai_text}
-
-Try typing the sentence back in Thai!${wordBreakdown}
-
-Practice writing the Thai sentence!`;
-
-      await this.bot.sendMessage(chatId, message);
-      
-      console.log(`✅ Immediate sentence sent to user ${userId}`);
-    } catch (error) {
-      console.error('❌ Error in sendImmediateSentence:', error);
-    }
-  }
 
   // Generate sentence using DeepSeek API
   async generateSentence(difficultyLevel) {
