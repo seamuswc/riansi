@@ -15,13 +15,16 @@ class DeepSeekService {
       - In Thai script
       - Include English translation
       - Be appropriate for the difficulty level
-      - Be educational and useful for language learning
+      
       
       For word_breakdown, provide an array of objects with:
       - word: the Thai word
       - meaning: English meaning
       - pinyin: Thai romanization/pronunciation (MUST include this field with proper Thai romanization like "chan", "chop", "gin", etc.)
       
+      Try to not use similiar sentences over and over again.
+      Use a variety of sentences to keep the learning experience interesting.
+
       Format the response as JSON with fields: thai_text, english_translation, word_breakdown`;
 
       const response = await axios.post(this.apiUrl, {
