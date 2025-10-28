@@ -271,17 +271,23 @@ class TelegramBotHandler {
         return;
       }
       
-      // Generate TON deep link for payment
+      // Generate payment links
       const tonAmount = Math.floor(config.TON_AMOUNT * 1000000000); // Convert to nanoTON
+      const usdtAmount = Math.floor(config.USDT_AMOUNT * 1000000); // Convert to microUSDT (6 decimals)
       const paymentReference = `thai-bot-${userId}-${Date.now()}`;
       
-      console.log(`💎 Creating TON payment link for user ${userId}`);
-      console.log(`💰 Amount: ${config.TON_AMOUNT} TON (${tonAmount} nanoTON)`);
+      console.log(`💎 Creating payment links for user ${userId}`);
+      console.log(`💰 TON Amount: ${config.TON_AMOUNT} TON (${tonAmount} nanoTON)`);
+      console.log(`💰 USDT Amount: ${config.USDT_AMOUNT} USDT (${usdtAmount} microUSDT)`);
       console.log(`🔗 Reference: ${paymentReference}`);
       
       // Create TON deep link
       const tonDeepLink = `ton://transfer/${config.TON_ADDRESS}?amount=${tonAmount}&text=${paymentReference}`;
       console.log(`🔗 TON Deep Link: ${tonDeepLink}`);
+      
+      // Create TON Native USDT deep link
+      const tonUsdtDeepLink = `ton://transfer/${config.TON_ADDRESS}?amount=${usdtAmount}&text=${paymentReference}&jetton=${config.USDT_CONTRACT_ADDRESS}`;
+      console.log(`🔗 TON USDT Deep Link: ${tonUsdtDeepLink}`);
       
       // Store payment reference for verification
       this.pendingPayments = this.pendingPayments || new Map();
@@ -296,6 +302,7 @@ class TelegramBotHandler {
         reply_markup: {
           inline_keyboard: [
             [{ text: '💎 Pay 1 TON', url: tonDeepLink }],
+            [{ text: '💵 Pay 1 USDT (TON)', url: tonUsdtDeepLink }],
             [{ text: '✅ I Paid', callback_data: `check_payment_${userId}` }],
             [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
           ]
@@ -304,7 +311,7 @@ class TelegramBotHandler {
       
       const message = `💎 **Subscribe to Thai Learning Bot**
       
-💰 **Cost:** 1 TON (≈ $2.50)
+💰 **Cost:** 1 TON (≈ $2.50) or 1 USDT (≈ $1.00)
 📅 **Duration:** 30 days
 🎯 **What you get:**
 • Daily Thai lessons with AI-generated content
@@ -312,10 +319,19 @@ class TelegramBotHandler {
 • Difficulty level customization
 
 💳 **To subscribe:**
-1. Click "Pay 1 TON" below
+1. Click your preferred payment method below
 2. Complete payment in your TON wallet
 3. Return to this chat and click "I Paid"
 4. We'll verify your payment instantly
+
+**Payment Options:**
+• **TON:** Native TON blockchain
+• **USDT:** Native USDT on TON (Jetton)
+
+📱 **Need a TON wallet?**
+• **Mobile:** Tonkeeper, TON Wallet
+• **Desktop:** Tonkeeper, MyTonWallet
+• **Web:** Tonkeeper Web
 
 ⚠️ **Important:** Keep this chat open during payment!`;
 
@@ -449,6 +465,7 @@ class TelegramBotHandler {
     }
   }
 
+
   async handleCheckPayment(chatId, userId) {
     try {
       console.log(`💳 Checking payment for user ${userId}`);
@@ -515,6 +532,55 @@ class TelegramBotHandler {
           if (paymentFound) break;
         }
         
+        // If TON payment not found, check TON USDT Jetton
+        if (!paymentFound) {
+          try {
+            console.log('🔍 Checking TON USDT Jetton transactions...');
+            
+            // Check for Jetton transfers in TON transactions
+            for (const tx of transactions) {
+              // Check if transaction has Jetton transfers
+              if (tx.out_msgs && tx.out_msgs.length > 0) {
+                for (const outMsg of tx.out_msgs) {
+                  // Check if this is a Jetton transfer
+                  if (outMsg.source && outMsg.destination && outMsg.decoded_body) {
+                    const body = outMsg.decoded_body;
+                    
+                    // Check if it's a Jetton transfer with our USDT contract
+                    if (body.jetton_transfer && 
+                        body.jetton_transfer.jetton_master_address === config.USDT_CONTRACT_ADDRESS) {
+                      
+                      // Check amount (1 USDT = 1,000,000 microUSDT)
+                      const expectedAmount = Math.floor(config.USDT_AMOUNT * 1000000);
+                      const receivedAmount = parseInt(body.jetton_transfer.amount);
+                      
+                      console.log(`💰 Jetton transfer: received ${receivedAmount} microUSDT (expected ${expectedAmount})`);
+                      
+                      // Check if amount matches and message contains reference
+                      if (receivedAmount >= expectedAmount && 
+                          body.jetton_transfer.forward_ton_amount && 
+                          body.jetton_transfer.forward_payload) {
+                        
+                        // Check the forward payload for our reference
+                        const payload = body.jetton_transfer.forward_payload;
+                        if (payload.includes(paymentData.reference)) {
+                          console.log(`✅ TON USDT Jetton Payment found: ${paymentData.reference}`);
+                          paymentFound = true;
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              
+              if (paymentFound) break;
+            }
+          } catch (usdtError) {
+            console.log('⚠️ TON USDT Jetton check error:', usdtError.message);
+          }
+        }
+        
         if (paymentFound) {
           // Payment confirmed - create subscription
           await database.createSubscription(userId.toString(), paymentData.reference, config.SUBSCRIPTION_DAYS);
@@ -544,14 +610,21 @@ class TelegramBotHandler {
           
         } else {
           // Payment not found
-          await this.bot.sendMessage(chatId, `❌ Payment not found. Please make sure you:
-          
+          await this.bot.sendMessage(chatId, `❌ Payment not found. Please check:
+
+**If you don't have a TON wallet:**
+• Install Tonkeeper or TON Wallet first
+• Then try the payment again
+
+**If you have a wallet:**
 1. ✅ Completed the payment in your TON wallet
-2. ✅ Used the exact amount: 1 TON
-3. ✅ Included the reference: ${paymentData.reference}
+2. ✅ Used the exact amount: 1 TON or 1 USDT
+3. ✅ Included the reference: \`${paymentData.reference}\`
 4. ✅ Wait a few minutes for blockchain confirmation
 
-Try clicking "I Paid" again in a few minutes.`);
+**Need help?**
+• Try clicking "I Paid" again in a few minutes
+• Make sure you're using a TON wallet (not other crypto wallets)`);
         }
         
       } catch (apiError) {

@@ -16,6 +16,10 @@ module.exports = {
   TON_AMOUNT: parseFloat(process.env.TON_AMOUNT) || 1.0,
   SUBSCRIPTION_DAYS: parseInt(process.env.SUBSCRIPTION_DAYS) || 30,
   
+  // TON Native USDT Configuration (Jetton)
+  USDT_CONTRACT_ADDRESS: process.env.USDT_CONTRACT_ADDRESS || 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', // Native USDT on TON
+  USDT_AMOUNT: parseFloat(process.env.USDT_AMOUNT) || 1.0, // $1.00 USDT
+  
   // Database
   DATABASE_PATH: process.env.DATABASE_PATH || './data/bot.db',
   
