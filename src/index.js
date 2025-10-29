@@ -17,10 +17,14 @@ class ThaiLearningBot {
     
     // Health check endpoint
     this.app.get('/health', (req, res) => {
+      const messageQueue = require('./messageQueue');
+      const queueStatus = messageQueue.getStatus();
+      
       res.json({ 
         status: 'healthy', 
         timestamp: new Date().toISOString(),
-        timezone: config.TIMEZONE
+        timezone: config.TIMEZONE,
+        messageQueue: queueStatus
       });
     });
 

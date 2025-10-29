@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const database = require('./database');
 const deepseekService = require('./services/deepseek');
+const messageQueue = require('./messageQueue');
 const config = require('./config');
 
 class Scheduler {
@@ -26,17 +27,33 @@ class Scheduler {
       // Get all users with active subscriptions
       const activeUsers = await this.getActiveUsers();
       
-      console.log(`📤 Sending daily messages to ${activeUsers.length} users`);
+      console.log(`📤 Queuing daily messages for ${activeUsers.length} users`);
 
-      for (const user of activeUsers) {
+      // Generate one sentence per difficulty level (cached)
+      const difficultySentences = {};
+      for (let level = 1; level <= 5; level++) {
         try {
-          await this.sendDailyMessageToUser(user);
-          // Add delay between messages to avoid rate limiting
-          await this.delay(1000);
+          difficultySentences[level] = await deepseekService.generateThaiSentence(level);
+          console.log(`✅ Generated sentence for difficulty ${level}`);
         } catch (error) {
-          console.error(`❌ Error sending message to user ${user.telegram_user_id}:`, error);
+          console.error(`❌ Error generating sentence for difficulty ${level}:`, error);
         }
       }
+
+      // Queue messages for all users
+      for (const user of activeUsers) {
+        try {
+          const sentenceData = difficultySentences[user.difficulty_level];
+          if (sentenceData) {
+            const message = this.createDailyMessage(sentenceData);
+            messageQueue.addMessage(user.telegram_user_id, message);
+          }
+        } catch (error) {
+          console.error(`❌ Error queuing message for user ${user.telegram_user_id}:`, error);
+        }
+      }
+
+      console.log(`📋 Queued ${activeUsers.length} daily messages`);
     } catch (error) {
       console.error('❌ Error in sendDailyMessages:', error);
     }
@@ -62,43 +79,32 @@ class Scheduler {
     });
   }
 
-  async sendDailyMessageToUser(user) {
-    try {
-      // Generate sentence based on user's difficulty level
-      const sentenceData = await deepseekService.generateThaiSentence(user.difficulty_level);
-      
-      // Save sentence to database
-      const sentenceId = await this.saveSentence(sentenceData, user.difficulty_level);
-      
-      // Create word breakdown
-      let wordBreakdown = '';
-      if (sentenceData.word_breakdown && sentenceData.word_breakdown.length > 0) {
-        wordBreakdown = '\n\n📚 Word Breakdown:\n';
-        for (const word of sentenceData.word_breakdown) {
-          if (typeof word === 'object' && word.word && word.meaning) {
-            const pinyin = word.pinyin || '';
-            wordBreakdown += `${word.word} - ${word.meaning} - ${pinyin}\n`;
-          } else if (typeof word === 'string') {
-            wordBreakdown += `${word}\n`;
-          }
+  createDailyMessage(sentenceData) {
+    // Create word breakdown
+    let wordBreakdown = '';
+    if (sentenceData.word_breakdown && sentenceData.word_breakdown.length > 0) {
+      wordBreakdown = '\n\n📚 Word Breakdown:\n';
+      for (const word of sentenceData.word_breakdown) {
+        if (typeof word === 'object' && word.word && word.meaning) {
+          const pinyin = word.pinyin || '';
+          wordBreakdown += `${word.word} - ${word.meaning} - ${pinyin}\n`;
+        } else if (typeof word === 'string') {
+          wordBreakdown += `${word}\n`;
         }
       }
+    }
 
-      const message = `🇹🇭 Daily Thai Lesson
+    return `🇹🇭 Daily Thai Lesson
 
 📝 Thai Sentence:
 ${sentenceData.thai_text}
 
+🔤 English Translation:
+${sentenceData.english_translation}
+
 Try typing the sentence back in Thai!${wordBreakdown}
 
 Practice writing the Thai sentence!`;
-
-      await this.bot.bot.sendMessage(user.telegram_user_id, message);
-      
-      console.log(`✅ Daily message sent to user ${user.telegram_user_id}`);
-    } catch (error) {
-      console.error(`❌ Error sending daily message to user ${user.telegram_user_id}:`, error);
-    }
   }
 
   async saveSentence(sentenceData, difficultyLevel) {
