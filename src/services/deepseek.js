@@ -5,9 +5,43 @@ class DeepSeekService {
   constructor() {
     this.apiKey = config.DEEPSEEK_API_KEY;
     this.apiUrl = config.DEEPSEEK_API_URL;
+    this.sentenceCache = {}; // Cache for sentences by difficulty level
+    this.lastCacheDate = null; // Track when cache was last updated
   }
 
-  async generateThaiSentence(difficultyLevel) {
+  // Check if cache needs to be reset (8:00 AM ICT)
+  shouldResetCache() {
+    const now = new Date();
+    const bangkokTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+    const currentHour = bangkokTime.getHours();
+    const currentDate = bangkokTime.toDateString();
+    
+    // Reset cache at 8:00 AM ICT or if it's a new day after 8 AM
+    const shouldReset = (currentHour >= 8 && this.lastCacheDate !== currentDate) || 
+                       (this.lastCacheDate && this.lastCacheDate !== currentDate);
+    
+    if (shouldReset) {
+      console.log('🔄 8:00 AM ICT detected, resetting sentence cache');
+      this.sentenceCache = {};
+      this.lastCacheDate = currentDate;
+      return true;
+    }
+    return false;
+  }
+
+  // Get cached sentence or generate new one
+  async generateThaiSentence(difficultyLevel, retryCount = 0) {
+    // Check if cache needs reset
+    this.shouldResetCache();
+    
+    // Return cached sentence if available
+    if (this.sentenceCache[difficultyLevel]) {
+      console.log(`📦 Using cached sentence for difficulty ${difficultyLevel}`);
+      return this.sentenceCache[difficultyLevel];
+    }
+    
+    console.log(`🔄 Generating new sentence for difficulty ${difficultyLevel}`);
+    
     try {
       const levelInfo = config.DIFFICULTY_LEVELS[difficultyLevel];
       const prompt = `Generate a Thai sentence for language learning at ${levelInfo.name} level (${levelInfo.description}). 
@@ -18,9 +52,14 @@ class DeepSeekService {
       
       
       For word_breakdown, provide an array of objects with:
-      - word: the Thai word
+      - word: the individual Thai word (break down into separate words, not phrases)
       - meaning: English meaning
       - pinyin: Thai romanization/pronunciation (MUST include this field with proper Thai romanization like "chan", "chop", "gin", etc.)
+      
+      IMPORTANT: Break down into individual words. For example:
+      - "ดื่มกาแฟ" (drinking coffee) should be broken down as "ดื่ม" (drink) + "กาแฟ" (coffee)
+      - "ไปโรงเรียน" (go to school) should be broken down as "ไป" (go) + "โรงเรียน" (school)
+      - "สวัสดีครับ" (hello sir) should be broken down as "สวัสดี" (hello) + "ครับ" (sir)
       
       Try to not use similiar sentences over and over again.
       Use a variety of sentences to keep the learning experience interesting.
@@ -36,7 +75,7 @@ class DeepSeekService {
           }
         ],
         temperature: 0.7,
-        max_tokens: 500
+        max_tokens: 1500
       }, {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -57,7 +96,12 @@ class DeepSeekService {
           cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
         }
         
+        console.log('🔍 Cleaned content length:', cleanContent.length);
+        console.log('🔍 Cleaned content preview:', cleanContent.substring(0, 200) + '...');
+        
         const parsed = JSON.parse(cleanContent);
+        console.log('🔍 Parsed JSON successfully');
+        console.log('🔍 Thai text:', parsed.thai_text);
         
         // Validate that we have actual Thai text
         if (!parsed.thai_text || parsed.thai_text.trim() === '' || parsed.thai_text.includes('```')) {
@@ -90,55 +134,32 @@ class DeepSeekService {
           });
         }
         
+        // Cache the generated sentence
+        this.sentenceCache[difficultyLevel] = parsed;
+        console.log(`💾 Cached sentence for difficulty ${difficultyLevel}`);
+        
         return parsed;
       } catch (parseError) {
         console.error('❌ JSON parsing failed:', parseError.message);
         console.error('❌ Raw content:', content);
         
-        // Try to extract Thai text manually
-        const lines = content.split('\n');
-        let thaiText = '';
-        let englishText = 'Hello';
-        
-        for (const line of lines) {
-          if (line.includes('thai_text') || line.includes('Thai')) {
-            const match = line.match(/["']([^"']+)["']/);
-            if (match && match[1] && !match[1].includes('```')) {
-              thaiText = match[1];
-            }
-          }
-          if (line.includes('english_translation') || line.includes('English')) {
-            const match = line.match(/["']([^"']+)["']/);
-            if (match && match[1]) {
-              englishText = match[1];
-            }
-          }
-        }
-        
-        // Fallback if extraction fails
-        if (!thaiText) {
-          throw new Error('Could not extract Thai text');
-        }
-        
-        return {
-          thai_text: thaiText,
-          english_translation: englishText,
-          word_breakdown: []
-        };
+        throw new Error('Failed to parse AI response');
       }
     } catch (error) {
-      console.error('❌ DeepSeek API error:', error.message);
+      console.error(`❌ DeepSeek API error (attempt ${retryCount + 1}):`, error.message);
       
-      // Fallback sentences for each difficulty level
-      const fallbackSentences = {
-        1: { thai_text: 'สวัสดี', english_translation: 'Hello', word_breakdown: ['สวัสดี'] },
-        2: { thai_text: 'ฉันชื่อจอห์น', english_translation: 'My name is John', word_breakdown: ['ฉัน', 'ชื่อ', 'จอห์น'] },
-        3: { thai_text: 'วันนี้อากาศดีมาก', english_translation: 'The weather is very nice today', word_breakdown: ['วันนี้', 'อากาศ', 'ดี', 'มาก'] },
-        4: { thai_text: 'ฉันชอบอ่านหนังสือในห้องสมุด', english_translation: 'I like reading books in the library', word_breakdown: ['ฉัน', 'ชอบ', 'อ่าน', 'หนังสือ', 'ใน', 'ห้องสมุด'] },
-        5: { thai_text: 'ประเทศไทยเป็นประเทศที่มีวัฒนธรรมที่สวยงามและมีประวัติศาสตร์ที่ยาวนาน', english_translation: 'Thailand is a country with beautiful culture and long history', word_breakdown: ['ประเทศไทย', 'เป็น', 'ประเทศ', 'ที่', 'มี', 'วัฒนธรรม', 'ที่', 'สวยงาม', 'และ', 'มี', 'ประวัติศาสตร์', 'ที่', 'ยาวนาน'] }
-      };
-
-      return fallbackSentences[difficultyLevel] || fallbackSentences[1];
+      // Retry logic
+      const maxRetries = 3;
+      if (retryCount < maxRetries) {
+        const baseDelay = 1000; // 1 second base delay
+        const delay = baseDelay * Math.pow(2, retryCount); // Exponential backoff
+        console.log(`🔄 Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.generateThaiSentence(difficultyLevel, retryCount + 1);
+      }
+      
+      console.error('❌ All DeepSeek attempts failed');
+      throw error;
     }
   }
 }

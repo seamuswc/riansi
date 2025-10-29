@@ -585,6 +585,9 @@ class TelegramBotHandler {
           
           await this.bot.sendMessage(chatId, successMessage, keyboard);
           
+          // Send immediate lesson
+          await this.sendImmediateSentence(chatId, userId);
+          
         } else {
           // Payment not found
           await this.bot.sendMessage(chatId, `❌ Payment not found. Try again in a few minutes.`);
@@ -677,6 +680,56 @@ Here's your first lesson:`;
     }
   }
 
+  // Send immediate sentence after payment
+  async sendImmediateSentence(chatId, userId) {
+    try {
+      // Get user's difficulty level
+      const user = await database.getUser(userId.toString());
+      if (!user) {
+        console.error('❌ User not found for immediate sentence');
+        return;
+      }
+
+      // Generate sentence based on user's difficulty level
+      const sentenceData = await this.generateSentence(user.difficulty_level);
+      
+      // Save sentence to database
+      const sentenceId = await this.saveSentence(sentenceData, user.difficulty_level);
+      
+      // Create word breakdown
+      let wordBreakdown = '';
+      if (sentenceData.word_breakdown && sentenceData.word_breakdown.length > 0) {
+        wordBreakdown = '\n\n📚 Word Breakdown:\n';
+        for (const word of sentenceData.word_breakdown) {
+          if (typeof word === 'object' && word.word && word.meaning) {
+            const pinyin = word.pinyin || '';
+            wordBreakdown += `${word.word} - ${word.meaning} - ${pinyin}\n`;
+          } else if (typeof word === 'string') {
+            wordBreakdown += `${word}\n`;
+          }
+        }
+      }
+
+      const message = `🇹🇭 Your First Thai Lesson
+
+📝 Thai Sentence:
+${sentenceData.thai_text}
+
+🔤 English Translation:
+${sentenceData.english_translation}
+
+Try typing the sentence back in Thai!${wordBreakdown}
+
+Practice writing the Thai sentence!`;
+
+      console.log(`📤 Sending immediate lesson to user ${userId}:`, message);
+      await this.bot.sendMessage(chatId, message);
+      
+      console.log(`✅ Immediate sentence sent to user ${userId}`);
+    } catch (error) {
+      console.error('❌ Error in sendImmediateSentence:', error);
+    }
+  }
 
   // Generate sentence using DeepSeek API
   async generateSentence(difficultyLevel) {
