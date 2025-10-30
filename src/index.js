@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const TelegramBotHandler = require('./telegramBot');
 const Scheduler = require('./scheduler');
 const config = require('./config');
@@ -15,6 +16,9 @@ class ThaiLearningBot {
     // Parse JSON bodies
     this.app.use(express.json());
     
+    // Serve static landing page
+    this.app.use(express.static(path.join(__dirname, '..', 'public')));
+    
     // Health check endpoint
     this.app.get('/health', (req, res) => {
       const messageQueue = require('./messageQueue');
@@ -28,13 +32,9 @@ class ThaiLearningBot {
       });
     });
 
-    // Root endpoint
+    // Root endpoint serves landing page
     this.app.get('/', (req, res) => {
-      res.json({
-        message: 'Thai Learning Bot API',
-        version: '1.0.0',
-        status: 'running'
-      });
+      res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
     });
 
     // Payment webhook endpoint

@@ -16,7 +16,7 @@ tar -czf thai-learning-bot.tar.gz \
   --exclude=.git \
   --exclude=data \
   --exclude=*.log \
-  src/ package.json .env.example
+  src/ public/ package.json .env.example
 
 # Upload to server
 echo "📤 Uploading to server..."
@@ -60,7 +60,7 @@ SUBSCRIPTION_DAYS=30
 TON_API_KEY=your-ton-console-api-key
 
 # Webhook Configuration
-WEBHOOK_BASE_URL=http://68.183.185.81:3000
+WEBHOOK_BASE_URL=https://riansi.xyz
 
 # Database
 DATABASE_PATH=./data/bot.db

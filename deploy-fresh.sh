@@ -15,6 +15,7 @@ echo "🚀 Uploading files and deploying fresh installation..."
 
 # Upload files directly
 scp -r src root@$SERVER_IP:/tmp/
+scp -r public root@$SERVER_IP:/tmp/
 scp package.json root@$SERVER_IP:/tmp/
 scp .env.example root@$SERVER_IP:/tmp/
 scp README.md root@$SERVER_IP:/tmp/
@@ -45,6 +46,7 @@ ssh root@$SERVER_IP << EOF
   
   # Copy fresh files
   cp -r /tmp/src $APP_DIR/
+  cp -r /tmp/public $APP_DIR/
   cp /tmp/package.json $APP_DIR/
   cp /tmp/.env.example $APP_DIR/
   cp /tmp/README.md $APP_DIR/
@@ -79,7 +81,7 @@ SUBSCRIPTION_DAYS=30
 TON_API_KEY=your-ton-console-api-key
 
 # Webhook Configuration
-WEBHOOK_BASE_URL=http://68.183.185.81:3000
+WEBHOOK_BASE_URL=https://riansi.xyz
 
 # Database
 DATABASE_PATH=./data/bot.db
