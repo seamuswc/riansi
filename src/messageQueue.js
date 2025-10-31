@@ -10,6 +10,11 @@ class MessageQueue {
     this.delayBetweenBatches = 1000; // 1 second delay between batches
   }
 
+  // Store bot instance for sending messages
+  setBot(botInstance) {
+    this.botInstance = botInstance;
+  }
+
   // Add message to queue
   addMessage(chatId, message, options = {}) {
     const queueItem = {
@@ -72,8 +77,11 @@ class MessageQueue {
   // Send message with retry logic
   async sendMessageWithRetry(queueItem) {
     try {
-      const bot = require('./telegramBot').bot;
-      await bot.sendMessage(queueItem.chatId, queueItem.message, queueItem.options);
+      if (!this.botInstance) {
+        throw new Error('Bot instance not set. Call messageQueue.setBot() first.');
+      }
+      
+      await this.botInstance.sendMessage(queueItem.chatId, queueItem.message, queueItem.options);
       
       console.log(`✅ Message sent to ${queueItem.chatId}`);
     } catch (error) {

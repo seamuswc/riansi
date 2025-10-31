@@ -8,6 +8,11 @@ class ThaiLearningBot {
   constructor() {
     this.app = express();
     this.telegramBot = new TelegramBotHandler();
+    
+    // Set bot instance for message queue so it can send messages
+    const messageQueue = require('./messageQueue');
+    messageQueue.setBot(this.telegramBot.bot);
+    
     this.scheduler = new Scheduler(this.telegramBot);
     this.setupExpress();
   }

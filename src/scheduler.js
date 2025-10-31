@@ -45,8 +45,19 @@ class Scheduler {
         try {
           const sentenceData = difficultySentences[user.difficulty_level];
           if (sentenceData) {
+            // Save sentence to database for tracking
+            await this.saveSentence(sentenceData, user.difficulty_level);
+            
             const message = this.createDailyMessage(sentenceData);
-            messageQueue.addMessage(user.telegram_user_id, message);
+            // Convert telegram_user_id (string) to number for chatId (Telegram API requires number for private chats)
+            const chatId = parseInt(user.telegram_user_id, 10);
+            if (isNaN(chatId)) {
+              console.error(`❌ Invalid chatId for user ${user.telegram_user_id}`);
+              continue;
+            }
+            messageQueue.addMessage(chatId, message);
+          } else {
+            console.error(`❌ No sentence data for difficulty level ${user.difficulty_level}`);
           }
         } catch (error) {
           console.error(`❌ Error queuing message for user ${user.telegram_user_id}:`, error);
