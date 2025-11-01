@@ -3,13 +3,14 @@ const axios = require('axios');
 /**
  * Price Service - Fetches real-time cryptocurrency prices
  * Uses CoinGecko API (free, no API key required)
+ * Prices are cached for 1 hour to respect free tier rate limits
  */
 class PriceService {
   constructor() {
     this.cache = {
       price: null,
       timestamp: 0,
-      cacheDuration: 60000 // Cache for 60 seconds to avoid rate limits
+      cacheDuration: 3600000 // Cache for 1 hour (3600000ms) to respect free tier limits
     };
   }
 
