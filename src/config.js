@@ -20,6 +20,10 @@ module.exports = {
   USDT_CONTRACT_ADDRESS: process.env.USDT_CONTRACT_ADDRESS || 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', // Native USDT on TON
   USDT_AMOUNT: parseFloat(process.env.USDT_AMOUNT) || 1.0, // $1.00 USDT
   
+  // Solana/Phantom Configuration
+  SOLANA_ADDRESS: process.env.SOLANA_ADDRESS || '8zS5w8MHSDQ4Pc12DZRLYQ78hgEwnBemVJMrfjUN6xXj',
+  SOLANA_AMOUNT: parseFloat(process.env.SOLANA_AMOUNT) || 1.0, // 1 SOL
+  
   // Database
   DATABASE_PATH: process.env.DATABASE_PATH || './data/bot.db',
   
