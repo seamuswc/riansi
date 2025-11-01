@@ -48,5 +48,19 @@ module.exports = {
     GOOD: 70,
     FAIR: 50,
     POOR: 30
+  },
+
+  // Payment Check Configuration
+  PAYMENT_CHECK: {
+    INITIAL_DELAY_MS: 3000, // 3 seconds before first check
+    RETRY_DELAY_MS: 3000, // 3 seconds between retries
+    MAX_ATTEMPTS: 3, // Maximum number of check attempts
+    TRANSACTION_LIMIT: 20 // Number of transactions to fetch from TON API
+  },
+
+  // TON Amount Conversions
+  TON_CONVERSIONS: {
+    NANO_TO_TON: 1000000000, // 1 TON = 1,000,000,000 nanoTON
+    MICRO_USDT_TO_USDT: 1000000 // 1 USDT = 1,000,000 microUSDT
   }
 };

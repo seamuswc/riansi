@@ -1,4 +1,5 @@
 const TelegramBot = require('node-telegram-bot-api');
+const axios = require('axios');
 const database = require('./database');
 const config = require('./config');
 const deepseekService = require('./services/deepseek');
@@ -21,6 +22,10 @@ class TelegramBotHandler {
       this.processedCallbacks = new Set();
       this.processedMessages = new Set();
       
+      // Payment tracking
+      this.pendingPayments = new Map();
+      this.checkingPayments = new Set();
+      
       this.setupEventHandlers();
       console.log('🤖 Thai Learning Bot started successfully');
     } catch (error) {
@@ -29,6 +34,19 @@ class TelegramBotHandler {
       console.error('❌ Error stack:', error.stack);
       throw error;
     }
+  }
+
+  /**
+   * Helper function to create inline keyboard
+   * @param {Array<Array<Object>>} buttons - Array of button rows
+   * @returns {Object} Telegram keyboard format
+   */
+  createKeyboard(buttons) {
+    return {
+      reply_markup: {
+        inline_keyboard: buttons
+      }
+    };
   }
 
   setupEventHandlers() {
@@ -102,20 +120,16 @@ class TelegramBotHandler {
       // Ensure user exists in database
       await database.createUser(userId.toString(), displayName);
       
-      const keyboard = {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '📚 Help', callback_data: 'help' },
-              { text: '📊 Status', callback_data: 'status' }
-            ],
-            [
-              { text: '💳 Subscribe', callback_data: 'subscribe' },
-              { text: '⚙️ Difficulty', callback_data: 'settings' }
-            ]
-          ]
-        }
-      };
+      const keyboard = this.createKeyboard([
+        [
+          { text: '📚 Help', callback_data: 'help' },
+          { text: '📊 Status', callback_data: 'status' }
+        ],
+        [
+          { text: '💳 Subscribe', callback_data: 'subscribe' },
+          { text: '⚙️ Difficulty', callback_data: 'settings' }
+        ]
+      ]);
 
       const welcomeMessage = `🇹🇭 Welcome to Thai Learning Bot!
 
@@ -138,18 +152,14 @@ class TelegramBotHandler {
 • Get daily Thai sentences at 9:00 AM ICT
 • Practice with authentic Thai content
 
-💰 Subscription: 1 TON for 30 days
+💰 Subscription: $1 USD for 30 days
 🎯 Difficulty: 5 levels (Beginner to Expert)
 
 🎮 Use the buttons below to navigate!`;
 
-    const keyboard = {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
-        ]
-      }
-    };
+    const keyboard = this.createKeyboard([
+      [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+    ]);
 
     await this.bot.sendMessage(chatId, helpMessage, keyboard);
   }
@@ -232,25 +242,14 @@ class TelegramBotHandler {
       statusMessage += `Your daily lessons continue at 9:00 AM Bangkok time.`;
 
       // Create keyboard based on subscription status
-      let keyboard;
-      if (subscription && subscription.status === 'active') {
-        keyboard = {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: '🚫 Unsubscribe', callback_data: 'unsubscribe' }],
-              [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
-            ]
-          }
-        };
-      } else {
-        keyboard = {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
-            ]
-          }
-        };
-      }
+      const keyboard = subscription && subscription.status === 'active'
+        ? this.createKeyboard([
+            [{ text: '🚫 Unsubscribe', callback_data: 'unsubscribe' }],
+            [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+          ])
+        : this.createKeyboard([
+            [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+          ]);
 
       await this.bot.sendMessage(chatId, statusMessage, keyboard);
     } catch (error) {
@@ -281,8 +280,8 @@ class TelegramBotHandler {
         tonAmountForUSD = 1.0 / fallbackPrice; // ~0.4 TON for $1
       }
       
-      const usdtAmount = Math.floor(config.USDT_AMOUNT * 1000000); // Convert to microUSDT (6 decimals)
-      const tonAmountNano = Math.floor(tonAmountForUSD * 1000000000); // Convert to nanoTON
+      const usdtAmount = Math.floor(config.USDT_AMOUNT * config.TON_CONVERSIONS.MICRO_USDT_TO_USDT); // Convert to microUSDT (6 decimals)
+      const tonAmountNano = Math.floor(tonAmountForUSD * config.TON_CONVERSIONS.NANO_TO_TON); // Convert to nanoTON
       const paymentReference = `thai-bot-${userId}-${Date.now()}`;
       
       console.log(`💎 Creating payment links for user ${userId}`);
@@ -300,7 +299,6 @@ class TelegramBotHandler {
       
       // Store payment reference for verification (store both amounts)
       // Use an array to store multiple pending payments per user to prevent clashes
-      this.pendingPayments = this.pendingPayments || new Map();
       
       // Get existing pending payments for this user (if any)
       const existingPayments = this.pendingPayments.get(userId.toString()) || [];
@@ -324,16 +322,12 @@ class TelegramBotHandler {
       const priceMessage = await priceService.formatPriceMessage(tonAmountForUSD, config.USDT_AMOUNT);
       
       // Create payment buttons
-      const keyboard = {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: `💎 Pay ${tonAmountForUSD.toFixed(4)} TON (Tonkeeper)`, url: tonDeepLink }],
-            [{ text: '💵 Pay 1 USDT (Tonkeeper)', url: tonUsdtDeepLink }],
-            [{ text: '✅ I Paid', callback_data: `check_payment_${userId}` }],
-            [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
-          ]
-        }
-      };
+      const keyboard = this.createKeyboard([
+        [{ text: `💎 Pay ${tonAmountForUSD.toFixed(4)} TON (Tonkeeper)`, url: tonDeepLink }],
+        [{ text: '💵 Pay 1 USDT (Tonkeeper)', url: tonUsdtDeepLink }],
+        [{ text: '✅ I Paid', callback_data: `check_payment_${userId}` }],
+        [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+      ]);
       
       const message = `💎 Subscribe to Thai Learning Bot
 
@@ -381,22 +375,18 @@ ${priceMessage}
         settingsMessage += `• Level ${level}: ${info.name} (${info.description})\n`;
       });
 
-      const keyboard = {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: 'Level 1', callback_data: 'level_1' },
-              { text: 'Level 2', callback_data: 'level_2' },
-              { text: 'Level 3', callback_data: 'level_3' }
-            ],
-            [
-              { text: 'Level 4', callback_data: 'level_4' },
-              { text: 'Level 5', callback_data: 'level_5' }
-            ],
-            [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
-          ]
-        }
-      };
+      const keyboard = this.createKeyboard([
+        [
+          { text: 'Level 1', callback_data: 'level_1' },
+          { text: 'Level 2', callback_data: 'level_2' },
+          { text: 'Level 3', callback_data: 'level_3' }
+        ],
+        [
+          { text: 'Level 4', callback_data: 'level_4' },
+          { text: 'Level 5', callback_data: 'level_5' }
+        ],
+        [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+      ]);
 
       await this.bot.sendMessage(chatId, settingsMessage, keyboard);
     } catch (error) {
@@ -426,13 +416,9 @@ ${priceMessage}
       
       const confirmMessage = `✅ Difficulty updated to Level ${level}!\n\nYour daily lessons will now be at ${levelName} level.`;
 
-      const keyboard = {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
-          ]
-        }
-      };
+      const keyboard = this.createKeyboard([
+        [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+      ]);
 
       console.log(`📤 Sending confirmation message to user ${userId}`);
       await this.bot.sendMessage(chatId, confirmMessage, keyboard);
@@ -460,14 +446,10 @@ ${priceMessage}
       
       const message = `🚫 Subscription Cancelled\n\nYour subscription has been cancelled. You will no longer receive daily lessons.\n\nYou can resubscribe anytime using the Subscribe button.`;
       
-      const keyboard = {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '💎 Subscribe Again', callback_data: 'subscribe' }],
-            [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
-          ]
-        }
-      };
+      const keyboard = this.createKeyboard([
+        [{ text: '💎 Subscribe Again', callback_data: 'subscribe' }],
+        [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+      ]);
       
       await this.bot.sendMessage(chatId, message, keyboard);
     } catch (error) {
@@ -478,11 +460,22 @@ ${priceMessage}
 
 
   async handleCheckPayment(chatId, userId) {
+    // Prevent duplicate checking messages if user clicks "I Paid" multiple times
+    const checkKey = `checking_${userId}`;
+    if (this.checkingPayments && this.checkingPayments.has(checkKey)) {
+      await this.bot.sendMessage(chatId, '⏳ Payment check already in progress. Please wait...');
+      return;
+    }
+    
+    // Mark as checking
+    this.checkingPayments.add(checkKey);
+    
     try {
       console.log(`💳 Checking payment for user ${userId}`);
       
       // Check if we have pending payment data
       if (!this.pendingPayments || !this.pendingPayments.has(userId.toString())) {
+        this.checkingPayments.delete(checkKey);
         await this.bot.sendMessage(chatId, '❌ No pending payment found. Please try subscribing again.');
         return;
       }
@@ -493,111 +486,77 @@ ${priceMessage}
       const paymentsToCheck = Array.isArray(pendingPaymentsList) ? pendingPaymentsList : [pendingPaymentsList];
       
       if (paymentsToCheck.length === 0) {
+        this.checkingPayments.delete(checkKey);
         await this.bot.sendMessage(chatId, '❌ No pending payment found. Please try subscribing again.');
         return;
       }
       
       console.log(`🔍 Checking ${paymentsToCheck.length} pending payment(s) for user ${userId}`);
       
-      // Send checking message (only once)
+      // Send checking message (only one message to user)
       await this.bot.sendMessage(chatId, '🔍 Checking your payment... Please wait a moment.');
       
+      // Wait before first check (silent - no message to user)
+      await new Promise(resolve => setTimeout(resolve, config.PAYMENT_CHECK.INITIAL_DELAY_MS));
+      
       try {
-        // Check TON blockchain for payment
-        const axios = require('axios');
-        const response = await axios.get(`https://tonapi.io/v2/blockchain/accounts/${config.TON_ADDRESS}/transactions`, {
-          headers: {
-            'Authorization': `Bearer ${config.TON_API_KEY}`
-          },
-          params: {
-            limit: 20 // Increased to check more transactions
-          }
-        });
-        
-        console.log(`📊 TON API response: ${response.status}`);
-        
-        // Look for payment with matching reference
-        const transactions = response.data.transactions || [];
         let paymentFound = false;
         let foundPaymentData = null;
+        const maxAttempts = config.PAYMENT_CHECK.MAX_ATTEMPTS;
         
-        console.log(`🔍 Searching ${transactions.length} transactions for payments...`);
-        
-        // Check all pending payments in reverse order (most recent first)
-        for (const paymentData of paymentsToCheck.reverse()) {
-          console.log(`🔍 Checking payment reference: ${paymentData.reference}`);
-          
-          // Check TON transactions first
-          for (const tx of transactions) {
-            // Check in_msg for text comment (TON payment)
-            if (tx.in_msg && tx.in_msg.decoded_body && tx.in_msg.decoded_body.text) {
-              const messageText = tx.in_msg.decoded_body.text;
-              // Use exact match to prevent substring clashes
-              if (messageText === paymentData.reference || messageText.includes(paymentData.reference)) {
-                console.log(`✅ TON Payment found in in_msg: ${paymentData.reference}`);
-                paymentFound = true;
-                foundPaymentData = paymentData;
-                break;
-              }
-            }
+        // Loop check up to 3 times
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          try {
+            console.log(`🔍 Payment check attempt ${attempt}/${maxAttempts}`);
             
-            // Check out_msgs for text comment
-            if (tx.out_msgs && tx.out_msgs.length > 0) {
-              for (const outMsg of tx.out_msgs) {
-                if (outMsg.decoded_body && outMsg.decoded_body.text) {
-                  const messageText = outMsg.decoded_body.text;
+            // Check TON blockchain for payment
+            const response = await axios.get(`https://tonapi.io/v2/blockchain/accounts/${config.TON_ADDRESS}/transactions`, {
+              headers: {
+                'Authorization': `Bearer ${config.TON_API_KEY}`
+              },
+              params: {
+                limit: config.PAYMENT_CHECK.TRANSACTION_LIMIT
+              }
+            });
+            
+            console.log(`📊 TON API response: ${response.status}`);
+            
+            // Look for payment with matching reference
+            const transactions = response.data.transactions || [];
+            
+            console.log(`🔍 Searching ${transactions.length} transactions for payments...`);
+            
+            // Check all pending payments in reverse order (most recent first)
+            // Use slice() to avoid mutating the original array
+            const paymentsReversed = [...paymentsToCheck].reverse();
+            for (const paymentData of paymentsReversed) {
+              console.log(`🔍 Checking payment reference: ${paymentData.reference}`);
+              
+              // Check TON transactions first
+              for (const tx of transactions) {
+                // Check in_msg for text comment (TON payment)
+                if (tx.in_msg && tx.in_msg.decoded_body && tx.in_msg.decoded_body.text) {
+                  const messageText = tx.in_msg.decoded_body.text;
                   // Use exact match to prevent substring clashes
                   if (messageText === paymentData.reference || messageText.includes(paymentData.reference)) {
-                    console.log(`✅ TON Payment found in out_msg: ${paymentData.reference}`);
+                    console.log(`✅ TON Payment found in in_msg: ${paymentData.reference}`);
                     paymentFound = true;
                     foundPaymentData = paymentData;
                     break;
                   }
                 }
-              }
-            }
-            
-            if (paymentFound) break;
-          }
-          
-          // If TON payment not found, check TON USDT Jetton
-          if (!paymentFound) {
-            try {
-              console.log(`🔍 Checking TON USDT Jetton transactions for reference: ${paymentData.reference}`);
-              
-              // Check for Jetton transfers in TON transactions
-              for (const tx of transactions) {
-                // Check if transaction has Jetton transfers
+                
+                // Check out_msgs for text comment
                 if (tx.out_msgs && tx.out_msgs.length > 0) {
                   for (const outMsg of tx.out_msgs) {
-                    // Check if this is a Jetton transfer
-                    if (outMsg.source && outMsg.destination && outMsg.decoded_body) {
-                      const body = outMsg.decoded_body;
-                      
-                      // Check if it's a Jetton transfer with our USDT contract
-                      if (body.jetton_transfer && 
-                          body.jetton_transfer.jetton_master_address === config.USDT_CONTRACT_ADDRESS) {
-                        
-                        // Check amount (1 USDT = 1,000,000 microUSDT)
-                        const expectedAmount = Math.floor(config.USDT_AMOUNT * 1000000);
-                        const receivedAmount = parseInt(body.jetton_transfer.amount);
-                        
-                        console.log(`💰 Jetton transfer: received ${receivedAmount} microUSDT (expected ${expectedAmount})`);
-                        
-                        // Check if amount matches and message contains reference
-                        if (receivedAmount >= expectedAmount && 
-                            body.jetton_transfer.forward_ton_amount && 
-                            body.jetton_transfer.forward_payload) {
-                          
-                          // Check the forward payload for our reference (use exact match when possible)
-                          const payload = body.jetton_transfer.forward_payload;
-                          if (payload && (payload.includes(paymentData.reference) || payload === paymentData.reference)) {
-                            console.log(`✅ TON USDT Jetton Payment found: ${paymentData.reference}`);
-                            paymentFound = true;
-                            foundPaymentData = paymentData;
-                            break;
-                          }
-                        }
+                    if (outMsg.decoded_body && outMsg.decoded_body.text) {
+                      const messageText = outMsg.decoded_body.text;
+                      // Use exact match to prevent substring clashes
+                      if (messageText === paymentData.reference || messageText.includes(paymentData.reference)) {
+                        console.log(`✅ TON Payment found in out_msg: ${paymentData.reference}`);
+                        paymentFound = true;
+                        foundPaymentData = paymentData;
+                        break;
                       }
                     }
                   }
@@ -605,50 +564,127 @@ ${priceMessage}
                 
                 if (paymentFound) break;
               }
-            } catch (usdtError) {
-              console.log('⚠️ TON USDT Jetton check error:', usdtError.message);
+              
+              // If TON payment not found, check TON USDT Jetton
+              if (!paymentFound) {
+                try {
+                  console.log(`🔍 Checking TON USDT Jetton transactions for reference: ${paymentData.reference}`);
+                  
+                  // Check for Jetton transfers in TON transactions
+                  for (const tx of transactions) {
+                    // Check if transaction has Jetton transfers
+                    if (tx.out_msgs && tx.out_msgs.length > 0) {
+                      for (const outMsg of tx.out_msgs) {
+                        // Check if this is a Jetton transfer
+                        if (outMsg.source && outMsg.destination && outMsg.decoded_body) {
+                          const body = outMsg.decoded_body;
+                          
+                          // Check if it's a Jetton transfer with our USDT contract
+                          if (body.jetton_transfer && 
+                              body.jetton_transfer.jetton_master_address === config.USDT_CONTRACT_ADDRESS) {
+                            
+                            // Check amount (1 USDT = 1,000,000 microUSDT)
+                            const expectedAmount = Math.floor(config.USDT_AMOUNT * config.TON_CONVERSIONS.MICRO_USDT_TO_USDT);
+                            const receivedAmount = parseInt(body.jetton_transfer.amount);
+                            
+                            console.log(`💰 Jetton transfer: received ${receivedAmount} microUSDT (expected ${expectedAmount})`);
+                            
+                            // Check if amount matches and message contains reference
+                            if (receivedAmount >= expectedAmount && 
+                                body.jetton_transfer.forward_ton_amount && 
+                                body.jetton_transfer.forward_payload) {
+                              
+                              // Check the forward payload for our reference (exact match when possible)
+                              const payload = body.jetton_transfer.forward_payload;
+                              if (payload && (payload.includes(paymentData.reference) || payload === paymentData.reference)) {
+                                console.log(`✅ TON USDT Jetton Payment found: ${paymentData.reference}`);
+                                paymentFound = true;
+                                foundPaymentData = paymentData;
+                                break;
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                    
+                    if (paymentFound) break;
+                  }
+                } catch (usdtError) {
+                  console.log('⚠️ TON USDT Jetton check error:', usdtError.message);
+                }
+              }
+              
+              if (paymentFound) break;
+            }
+            
+            // If payment found, break out of retry loop
+            if (paymentFound) {
+              break;
+            }
+            
+            // If not found and not last attempt, wait before next check (silent - no message to user)
+            if (attempt < maxAttempts) {
+              console.log(`⏳ Payment not found on attempt ${attempt}, waiting before retry...`);
+              await new Promise(resolve => setTimeout(resolve, config.PAYMENT_CHECK.RETRY_DELAY_MS));
+            }
+            
+          } catch (apiError) {
+            console.error(`❌ TON API Error on attempt ${attempt}:`, apiError.message);
+            
+            // If not last attempt, wait and retry
+            if (attempt < maxAttempts) {
+              console.log(`⏳ API error on attempt ${attempt}, waiting before retry...`);
+              await new Promise(resolve => setTimeout(resolve, config.PAYMENT_CHECK.RETRY_DELAY_MS));
+            } else {
+              // Last attempt failed with API error
+              await this.bot.sendMessage(chatId, '❌ Payment verification temporarily unavailable. Please try again in a few minutes.');
+              return;
             }
           }
-          
-          if (paymentFound) break;
+        }
+      
+      // Only ONE message sent: success if either TON or USDT payment found, failure if neither found
+      if (paymentFound && foundPaymentData) {
+        // Payment confirmed (either TON or USDT succeeded) - create subscription
+        await database.createSubscription(userId.toString(), foundPaymentData.reference, config.SUBSCRIPTION_DAYS);
+        
+        // Remove ALL pending payments for this user (payment confirmed)
+        this.pendingPayments.delete(userId.toString());
+        
+        // Send success message (only one message sent)
+        const successMessage = `🎉 Payment confirmed! Subscription active for 30 days.`;
+        
+        const keyboard = this.createKeyboard([
+          [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+        ]);
+        
+        await this.bot.sendMessage(chatId, successMessage, keyboard);
+        
+        // Send immediate lesson
+        await this.sendImmediateSentence(chatId, userId);
+        
+      } else {
+        // Payment not found after 3 attempts (both TON and USDT checks failed)
+        // Only one failure message sent
+        await this.bot.sendMessage(chatId, `❌ Payment not found after 3 attempts. Try again in a few minutes.`);
         }
         
-        if (paymentFound && foundPaymentData) {
-          // Payment confirmed - create subscription
-          await database.createSubscription(userId.toString(), foundPaymentData.reference, config.SUBSCRIPTION_DAYS);
-          
-          // Remove ALL pending payments for this user (payment confirmed)
-          this.pendingPayments.delete(userId.toString());
-          
-          // Send success message
-          const successMessage = `🎉 Payment confirmed! Subscription active for 30 days.`;
-          
-          const keyboard = {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
-              ]
-            }
-          };
-          
-          await this.bot.sendMessage(chatId, successMessage, keyboard);
-          
-          // Send immediate lesson
-          await this.sendImmediateSentence(chatId, userId);
-          
-        } else {
-          // Payment not found
-          await this.bot.sendMessage(chatId, `❌ Payment not found. Try again in a few minutes.`);
-        }
-        
-      } catch (apiError) {
-        console.error('❌ TON API Error:', apiError.message);
-        await this.bot.sendMessage(chatId, '❌ Payment verification temporarily unavailable. Please try again in a few minutes.');
+      } catch (error) {
+        console.error('❌ Error in payment check loop:', error);
+        await this.bot.sendMessage(chatId, '❌ Sorry, something went wrong checking your payment. Please try again.');
+      } finally {
+        // Clear checking flag
+        this.checkingPayments.delete(checkKey);
       }
       
     } catch (error) {
       console.error('❌ Error in handleCheckPayment:', error);
       await this.bot.sendMessage(chatId, '❌ Sorry, something went wrong checking your payment. Please try again.');
+      // Clear checking flag on error
+      if (this.checkingPayments) {
+        this.checkingPayments.delete(checkKey);
+      }
     }
   }
 
@@ -782,7 +818,6 @@ Practice writing the Thai sentence!`;
   // Generate sentence using DeepSeek API
   async generateSentence(difficultyLevel) {
     try {
-      const deepseekService = require('./services/deepseek');
       return await deepseekService.generateThaiSentence(difficultyLevel);
     } catch (error) {
       console.error('❌ Error generating sentence:', error);

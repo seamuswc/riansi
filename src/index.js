@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const TelegramBotHandler = require('./telegramBot');
 const Scheduler = require('./scheduler');
+const messageQueue = require('./messageQueue');
 const config = require('./config');
 
 class ThaiLearningBot {
@@ -11,7 +12,6 @@ class ThaiLearningBot {
     this.telegramBot = new TelegramBotHandler();
     
     // Set bot instance for message queue so it can send messages
-    const messageQueue = require('./messageQueue');
     messageQueue.setBot(this.telegramBot.bot);
     
     this.scheduler = new Scheduler(this.telegramBot);
@@ -31,7 +31,6 @@ class ThaiLearningBot {
     
     // Health check endpoint
     this.app.get('/health', (req, res) => {
-      const messageQueue = require('./messageQueue');
       const queueStatus = messageQueue.getStatus();
       
       res.json({ 

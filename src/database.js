@@ -8,7 +8,8 @@ class Database {
   }
 
   async init() {
-    const dbPath = process.env.DATABASE_PATH || './data/bot.db';
+    const config = require('./config');
+    const dbPath = config.DATABASE_PATH;
     this.db = new sqlite3.Database(dbPath, async (err) => {
       if (err) {
         console.error('❌ Database connection error:', err.message);
