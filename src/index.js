@@ -48,6 +48,7 @@ class ThaiLearningBot {
     });
 
     // Base/Ethereum payment redirect endpoint (Telegram doesn't support ethereum:// protocol)
+    // Use HTML meta redirect to attempt opening wallet
     this.app.get('/pay/base', (req, res) => {
       const { address, amount, ref } = req.query;
       
@@ -58,9 +59,26 @@ class ThaiLearningBot {
       // Create EIP-681 format deep link
       const ethereumLink = `ethereum:${address}@8453/transfer?value=${amount}`;
       
-      // Redirect to ethereum:// link
-      // This will attempt to open the user's Ethereum wallet
-      res.redirect(ethereumLink);
+      // Send HTML page with meta redirect and JavaScript fallback
+      // This attempts to open the wallet on mobile devices
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Opening Wallet...</title>
+          <meta http-equiv="refresh" content="0;url=${ethereumLink}">
+        </head>
+        <body>
+          <p>Opening your wallet...</p>
+          <p>If it doesn't open automatically, <a href="${ethereumLink}">click here</a></p>
+          <script>
+            window.location.href = "${ethereumLink}";
+          </script>
+        </body>
+        </html>
+      `);
     });
 
 
