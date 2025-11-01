@@ -79,20 +79,31 @@ class PriceService {
   }
 
   /**
+   * Calculate TON amount needed for $1 USD
+   * @param {number} usdAmount - USD amount (defaults to 1.0)
+   * @returns {Promise<number>} TON amount needed
+   */
+  async getTonAmountForUSD(usdAmount = 1.0) {
+    const price = await this.getTonPriceUSD();
+    
+    if (!price) {
+      return null; // Couldn't fetch price
+    }
+
+    // Calculate: if 1 TON = $X, then $1 = 1/X TON
+    const tonAmount = usdAmount / price;
+    return tonAmount;
+  }
+
+  /**
    * Format price message with real-time USD conversion
    * @param {number} tonAmount - Amount in TON
    * @param {number} usdtAmount - Amount in USDT (defaults to 1.0)
    * @returns {Promise<string>} Formatted message
    */
   async formatPriceMessage(tonAmount, usdtAmount = 1.0) {
-    const tonUSD = await this.getTonValueUSD(tonAmount);
-    
-    if (tonUSD) {
-      return `💰 Cost: ${tonAmount} TON (${tonUSD}) or ${usdtAmount} USDT (≈ $${usdtAmount.toFixed(2)})`;
-    } else {
-      // Fallback if price fetch fails
-      return `💰 Cost: ${tonAmount} TON or ${usdtAmount} USDT (≈ $${usdtAmount.toFixed(2)})`;
-    }
+    // Both are $1 USD equivalent
+    return `💰 Cost: ${tonAmount.toFixed(4)} TON (≈ $1.00) or ${usdtAmount} USDT (≈ $${usdtAmount.toFixed(2)})`;
   }
 }
 

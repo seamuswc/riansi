@@ -271,40 +271,50 @@ class TelegramBotHandler {
         return;
       }
       
-      // Generate payment links
-      const tonAmount = Math.floor(config.TON_AMOUNT * 1000000000); // Convert to nanoTON
+      // Calculate TON amount for $1 USD (equivalent to USDT amount)
+      let tonAmountForUSD = await priceService.getTonAmountForUSD(1.0);
+      
+      if (!tonAmountForUSD) {
+        // Fallback if price fetch fails - use a default estimate (assume $2.50 per TON)
+        console.warn('⚠️ Could not fetch TON price, using fallback estimate');
+        const fallbackPrice = 2.5;
+        tonAmountForUSD = 1.0 / fallbackPrice; // ~0.4 TON for $1
+      }
+      
       const usdtAmount = Math.floor(config.USDT_AMOUNT * 1000000); // Convert to microUSDT (6 decimals)
+      const tonAmountNano = Math.floor(tonAmountForUSD * 1000000000); // Convert to nanoTON
       const paymentReference = `thai-bot-${userId}-${Date.now()}`;
       
       console.log(`💎 Creating payment links for user ${userId}`);
-      console.log(`💰 TON Amount: ${config.TON_AMOUNT} TON (${tonAmount} nanoTON)`);
+      console.log(`💰 TON Amount: ${tonAmountForUSD.toFixed(4)} TON (≈ $1.00, ${tonAmountNano} nanoTON)`);
       console.log(`💰 USDT Amount: ${config.USDT_AMOUNT} USDT (${usdtAmount} microUSDT)`);
       console.log(`🔗 Reference: ${paymentReference}`);
       
       // Create TON deep link
-      const tonDeepLink = `ton://transfer/${config.TON_ADDRESS}?amount=${tonAmount}&text=${paymentReference}`;
+      const tonDeepLink = `ton://transfer/${config.TON_ADDRESS}?amount=${tonAmountNano}&text=${paymentReference}`;
       console.log(`🔗 TON Deep Link: ${tonDeepLink}`);
       
       // Create TON Native USDT deep link
       const tonUsdtDeepLink = `ton://transfer/${config.TON_ADDRESS}?amount=${usdtAmount}&text=${paymentReference}&jetton=${config.USDT_CONTRACT_ADDRESS}`;
       console.log(`🔗 TON USDT Deep Link: ${tonUsdtDeepLink}`);
       
-      // Store payment reference for verification
+      // Store payment reference for verification (store both amounts)
       this.pendingPayments = this.pendingPayments || new Map();
       this.pendingPayments.set(userId.toString(), {
         reference: paymentReference,
-        amount: tonAmount,
+        amount: tonAmountNano,
+        tonAmount: tonAmountForUSD,
         timestamp: Date.now()
       });
       
-      // Fetch real-time TON price in USD
-      const priceMessage = await priceService.formatPriceMessage(config.TON_AMOUNT, config.USDT_AMOUNT);
+      // Format price message with $1 USD equivalent
+      const priceMessage = await priceService.formatPriceMessage(tonAmountForUSD, config.USDT_AMOUNT);
       
       // Create payment buttons
       const keyboard = {
         reply_markup: {
           inline_keyboard: [
-            [{ text: '💎 Pay 1 TON', url: tonDeepLink }],
+            [{ text: `💎 Pay ${tonAmountForUSD.toFixed(4)} TON (Tonkeeper)`, url: tonDeepLink }],
             [{ text: '💵 Pay 1 USDT (TON)', url: tonUsdtDeepLink }],
             [{ text: '✅ I Paid', callback_data: `check_payment_${userId}` }],
             [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
