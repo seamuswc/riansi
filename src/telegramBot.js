@@ -2,6 +2,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const database = require('./database');
 const config = require('./config');
 const deepseekService = require('./services/deepseek');
+const priceService = require('./services/priceService');
 
 class TelegramBotHandler {
   constructor(options = {}) {
@@ -278,7 +279,6 @@ class TelegramBotHandler {
       console.log(`💎 Creating payment links for user ${userId}`);
       console.log(`💰 TON Amount: ${config.TON_AMOUNT} TON (${tonAmount} nanoTON)`);
       console.log(`💰 USDT Amount: ${config.USDT_AMOUNT} USDT (${usdtAmount} microUSDT)`);
-      console.log(`💰 Base Amount: ${config.BASE_AMOUNT} ETH`);
       console.log(`🔗 Reference: ${paymentReference}`);
       
       // Create TON deep link
@@ -289,15 +289,6 @@ class TelegramBotHandler {
       const tonUsdtDeepLink = `ton://transfer/${config.TON_ADDRESS}?amount=${usdtAmount}&text=${paymentReference}&jetton=${config.USDT_CONTRACT_ADDRESS}`;
       console.log(`🔗 TON USDT Deep Link: ${tonUsdtDeepLink}`);
       
-      // Create Base/Ethereum deep link using EIP-681 format
-      // Format: ethereum:ADDRESS@8453/transfer?value=AMOUNT (Base chain ID is 8453)
-      // Amount in wei: 0.01 ETH = 10000000000000000 wei (1e16 wei)
-      // Use https redirect endpoint since Telegram doesn't support ethereum:// protocol
-      const baseAmountWei = Math.floor(config.BASE_AMOUNT * 1e18).toString(); // Convert ETH to wei
-      const baseDeepLink = `https://riansi.xyz/pay/base?address=${config.BASE_ADDRESS}&amount=${baseAmountWei}&ref=${encodeURIComponent(paymentReference)}`;
-      console.log(`🔗 Base Deep Link (redirect): ${baseDeepLink}`);
-      console.log(`💰 Base Amount: ${config.BASE_AMOUNT} ETH (${baseAmountWei} wei)`);
-      
       // Store payment reference for verification
       this.pendingPayments = this.pendingPayments || new Map();
       this.pendingPayments.set(userId.toString(), {
@@ -306,13 +297,15 @@ class TelegramBotHandler {
         timestamp: Date.now()
       });
       
+      // Fetch real-time TON price in USD
+      const priceMessage = await priceService.formatPriceMessage(config.TON_AMOUNT, config.USDT_AMOUNT);
+      
       // Create payment buttons
       const keyboard = {
         reply_markup: {
           inline_keyboard: [
             [{ text: '💎 Pay 1 TON', url: tonDeepLink }],
             [{ text: '💵 Pay 1 USDT (TON)', url: tonUsdtDeepLink }],
-            [{ text: '💙 Pay 0.01 ETH (Base)', url: baseDeepLink }],
             [{ text: '✅ I Paid', callback_data: `check_payment_${userId}` }],
             [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
           ]
@@ -321,7 +314,7 @@ class TelegramBotHandler {
       
       const message = `💎 Subscribe to Thai Learning Bot
 
-💰 Cost: 1 TON (≈ $2.50), 1 USDT (≈ $1.00), or 0.01 ETH on Base (≈ $2.50)    
+${priceMessage}    
 📅 Duration: 30 days of daily lessons        
 🎯 What you get:
 • Daily Thai lessons
