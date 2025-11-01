@@ -499,6 +499,9 @@ ${priceMessage}
       
       console.log(`🔍 Checking ${paymentsToCheck.length} pending payment(s) for user ${userId}`);
       
+      // Send checking message (only once)
+      await this.bot.sendMessage(chatId, '🔍 Checking your payment... Please wait a moment.');
+      
       try {
         // Check TON blockchain for payment
         const axios = require('axios');
