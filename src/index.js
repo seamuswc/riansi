@@ -1,9 +1,9 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const TelegramBotHandler = require('./telegramBot');
 const Scheduler = require('./scheduler');
 const config = require('./config');
-const nodemailer = require('nodemailer');
 
 class ThaiLearningBot {
   constructor() {
@@ -107,42 +107,24 @@ class ThaiLearningBot {
         return res.status(400).json({ error: 'Message is required' });
       }
 
-      // Check if email is configured
-      if (!config.CONTACT_EMAIL || !config.SMTP_USER || !config.SMTP_PASS) {
-        console.error('❌ Email not configured - missing CONTACT_EMAIL, SMTP_USER, or SMTP_PASS');
-        return res.status(500).json({ error: 'Contact form is not configured. Please contact the administrator.' });
+      // Create logs directory if it doesn't exist
+      const logsDir = path.join(__dirname, '..', 'logs');
+      if (!fs.existsSync(logsDir)) {
+        fs.mkdirSync(logsDir, { recursive: true });
       }
 
-      // Create email transporter
-      const transporter = nodemailer.createTransport({
-        host: config.SMTP_HOST,
-        port: config.SMTP_PORT,
-        secure: config.SMTP_PORT === 465, // true for 465, false for other ports
-        auth: {
-          user: config.SMTP_USER,
-          pass: config.SMTP_PASS
-        }
-      });
-
-      // Email content
-      const mailOptions = {
-        from: `"Thai Learning Bot Contact Form" <${config.SMTP_FROM}>`,
-        to: config.CONTACT_EMAIL,
-        subject: `📝 Contact Form Submission - ${new Date().toLocaleString()}`,
-        text: `New contact form submission from Thai Learning Bot website:\n\n${message}\n\n---\nSubmitted at: ${new Date().toISOString()}\nIP: ${req.ip || req.connection.remoteAddress}`,
-        html: `
-          <h2>New Contact Form Submission</h2>
-          <p><strong>Message:</strong></p>
-          <p style="white-space: pre-wrap; background: #f5f5f5; padding: 15px; border-radius: 5px;">${message.replace(/\n/g, '<br>')}</p>
-          <hr>
-          <p><small>Submitted at: ${new Date().toLocaleString()}<br>IP: ${req.ip || req.connection.remoteAddress}</small></p>
-        `
-      };
-
-      // Send email
-      await transporter.sendMail(mailOptions);
+      // Log file path
+      const logFile = path.join(logsDir, 'contact-form.log');
       
-      console.log('📧 Contact form email sent successfully');
+      // Format log entry
+      const timestamp = new Date().toISOString();
+      const ip = req.ip || req.connection.remoteAddress || 'unknown';
+      const logEntry = `\n=== Contact Form Submission ===\nTimestamp: ${timestamp}\nIP: ${ip}\nMessage:\n${message}\n${'='.repeat(50)}\n`;
+      
+      // Append to log file
+      fs.appendFileSync(logFile, logEntry, 'utf8');
+      
+      console.log('📝 Contact form message logged successfully');
       
       res.json({ 
         status: 'success', 
@@ -151,7 +133,7 @@ class ThaiLearningBot {
       
     } catch (error) {
       console.error('❌ Contact form error:', error);
-      res.status(500).json({ error: 'Failed to send message. Please try again later.' });
+      res.status(500).json({ error: 'Failed to save message. Please try again later.' });
     }
   }
 

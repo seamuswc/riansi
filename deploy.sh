@@ -15,6 +15,7 @@ tar -czf thai-learning-bot.tar.gz \
   --exclude=node_modules \
   --exclude=.git \
   --exclude=data \
+  --exclude=logs \
   --exclude=*.log \
   src/ public/ package.json .env.example
 

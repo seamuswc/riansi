@@ -48,15 +48,5 @@ module.exports = {
     GOOD: 70,
     FAIR: 50,
     POOR: 30
-  },
-  
-  // Contact Form Email Configuration
-  CONTACT_EMAIL: process.env.CONTACT_EMAIL || '', // Your email address (hidden from frontend)
-  
-  // Email Service Configuration (using SMTP - Gmail example)
-  SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
-  SMTP_PORT: parseInt(process.env.SMTP_PORT) || 587,
-  SMTP_USER: process.env.SMTP_USER || '', // Your email address for SMTP
-  SMTP_PASS: process.env.SMTP_PASS || '', // Your email app password
-  SMTP_FROM: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@riansi.xyz'
+  }
 };
