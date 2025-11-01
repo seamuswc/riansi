@@ -20,9 +20,9 @@ module.exports = {
   USDT_CONTRACT_ADDRESS: process.env.USDT_CONTRACT_ADDRESS || 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', // Native USDT on TON
   USDT_AMOUNT: parseFloat(process.env.USDT_AMOUNT) || 1.0, // $1.00 USDT
   
-  // Solana/Phantom Configuration
-  SOLANA_ADDRESS: process.env.SOLANA_ADDRESS || '8zS5w8MHSDQ4Pc12DZRLYQ78hgEwnBemVJMrfjUN6xXj',
-  SOLANA_AMOUNT: parseFloat(process.env.SOLANA_AMOUNT) || 0.01, // 0.01 SOL
+  // Base/Ethereum Configuration
+  BASE_ADDRESS: process.env.BASE_ADDRESS || '0x0040a6a1A835A6265201A178a939b5B1749CD9cA',
+  BASE_AMOUNT: parseFloat(process.env.BASE_AMOUNT) || 0.01, // 0.01 ETH on Base
   
   // Database
   DATABASE_PATH: process.env.DATABASE_PATH || './data/bot.db',

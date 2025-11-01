@@ -278,7 +278,7 @@ class TelegramBotHandler {
       console.log(`💎 Creating payment links for user ${userId}`);
       console.log(`💰 TON Amount: ${config.TON_AMOUNT} TON (${tonAmount} nanoTON)`);
       console.log(`💰 USDT Amount: ${config.USDT_AMOUNT} USDT (${usdtAmount} microUSDT)`);
-      console.log(`💰 SOL Amount: ${config.SOLANA_AMOUNT} SOL`);
+      console.log(`💰 Base Amount: ${config.BASE_AMOUNT} ETH`);
       console.log(`🔗 Reference: ${paymentReference}`);
       
       // Create TON deep link
@@ -289,10 +289,13 @@ class TelegramBotHandler {
       const tonUsdtDeepLink = `ton://transfer/${config.TON_ADDRESS}?amount=${usdtAmount}&text=${paymentReference}&jetton=${config.USDT_CONTRACT_ADDRESS}`;
       console.log(`🔗 TON USDT Deep Link: ${tonUsdtDeepLink}`);
       
-      // Create Solana/Phantom deep link - use https format (Telegram doesn't support solana:// protocol)
-      // Format: https://phantom.app/ul/v1/send?recipient=ADDRESS&amount=AMOUNT&cluster=mainnet-beta
-      const solanaDeepLink = `https://phantom.app/ul/v1/send?recipient=${config.SOLANA_ADDRESS}&amount=${config.SOLANA_AMOUNT}&cluster=mainnet-beta`;
-      console.log(`🔗 Solana Deep Link: ${solanaDeepLink}`);
+      // Create Base/Ethereum deep link using EIP-681 format
+      // Format: ethereum:ADDRESS@8453/transfer?value=AMOUNT (Base chain ID is 8453)
+      // Amount in wei: 0.01 ETH = 10000000000000000 wei (1e16 wei)
+      const baseAmountWei = Math.floor(config.BASE_AMOUNT * 1e18).toString(); // Convert ETH to wei
+      const baseDeepLink = `ethereum:${config.BASE_ADDRESS}@8453/transfer?value=${baseAmountWei}`;
+      console.log(`🔗 Base Deep Link: ${baseDeepLink}`);
+      console.log(`💰 Base Amount: ${config.BASE_AMOUNT} ETH (${baseAmountWei} wei)`);
       
       // Store payment reference for verification
       this.pendingPayments = this.pendingPayments || new Map();
@@ -308,7 +311,7 @@ class TelegramBotHandler {
           inline_keyboard: [
             [{ text: '💎 Pay 1 TON', url: tonDeepLink }],
             [{ text: '💵 Pay 1 USDT (TON)', url: tonUsdtDeepLink }],
-            [{ text: '🟣 Pay 0.01 SOL (Phantom)', url: solanaDeepLink }],
+            [{ text: '💙 Pay 0.01 ETH (Base)', url: baseDeepLink }],
             [{ text: '✅ I Paid', callback_data: `check_payment_${userId}` }],
             [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
           ]
@@ -317,7 +320,7 @@ class TelegramBotHandler {
       
       const message = `💎 Subscribe to Thai Learning Bot
 
-💰 Cost: 1 TON (≈ $2.50), 1 USDT (≈ $1.00), or 0.01 SOL (≈ $1.50)    
+💰 Cost: 1 TON (≈ $2.50), 1 USDT (≈ $1.00), or 0.01 ETH on Base (≈ $2.50)    
 📅 Duration: 30 days of daily lessons        
 🎯 What you get:
 • Daily Thai lessons
