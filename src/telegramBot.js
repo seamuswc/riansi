@@ -315,7 +315,7 @@ class TelegramBotHandler {
         reply_markup: {
           inline_keyboard: [
             [{ text: `💎 Pay ${tonAmountForUSD.toFixed(4)} TON (Tonkeeper)`, url: tonDeepLink }],
-            [{ text: '💵 Pay 1 USDT (TON)', url: tonUsdtDeepLink }],
+            [{ text: '💵 Pay 1 USDT (Tonkeeper)', url: tonUsdtDeepLink }],
             [{ text: '✅ I Paid', callback_data: `check_payment_${userId}` }],
             [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
           ]

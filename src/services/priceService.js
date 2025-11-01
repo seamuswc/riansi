@@ -103,7 +103,7 @@ class PriceService {
    */
   async formatPriceMessage(tonAmount, usdtAmount = 1.0) {
     // Both are $1 USD equivalent
-    return `💰 Cost: ${tonAmount.toFixed(4)} TON (≈ $1.00) or ${usdtAmount} USDT (≈ $${usdtAmount.toFixed(2)})`;
+    return `💰 Cost: ${tonAmount.toFixed(4)} TON (≈ $1.00) or ${usdtAmount} USDT`;
   }
 }
 
