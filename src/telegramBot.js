@@ -290,8 +290,8 @@ class TelegramBotHandler {
       console.log(`🔗 TON USDT Deep Link: ${tonUsdtDeepLink}`);
       
       // Create Solana/Phantom deep link - use https format (Telegram doesn't support solana:// protocol)
-      // Format: https://phantom.app/ul/send?recipient=ADDRESS&amount=AMOUNT (amount in SOL, not lamports)
-      const solanaDeepLink = `https://phantom.app/ul/send?recipient=${config.SOLANA_ADDRESS}&amount=${config.SOLANA_AMOUNT}&memo=${encodeURIComponent(paymentReference)}`;
+      // Format: https://phantom.app/ul/v1/send?recipient=ADDRESS&amount=AMOUNT&cluster=mainnet-beta
+      const solanaDeepLink = `https://phantom.app/ul/v1/send?recipient=${config.SOLANA_ADDRESS}&amount=${config.SOLANA_AMOUNT}&cluster=mainnet-beta`;
       console.log(`🔗 Solana Deep Link: ${solanaDeepLink}`);
       
       // Store payment reference for verification
