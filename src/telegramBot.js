@@ -292,9 +292,10 @@ class TelegramBotHandler {
       // Create Base/Ethereum deep link using EIP-681 format
       // Format: ethereum:ADDRESS@8453/transfer?value=AMOUNT (Base chain ID is 8453)
       // Amount in wei: 0.01 ETH = 10000000000000000 wei (1e16 wei)
+      // Use https redirect endpoint since Telegram doesn't support ethereum:// protocol
       const baseAmountWei = Math.floor(config.BASE_AMOUNT * 1e18).toString(); // Convert ETH to wei
-      const baseDeepLink = `ethereum:${config.BASE_ADDRESS}@8453/transfer?value=${baseAmountWei}`;
-      console.log(`🔗 Base Deep Link: ${baseDeepLink}`);
+      const baseDeepLink = `https://riansi.xyz/pay/base?address=${config.BASE_ADDRESS}&amount=${baseAmountWei}&ref=${encodeURIComponent(paymentReference)}`;
+      console.log(`🔗 Base Deep Link (redirect): ${baseDeepLink}`);
       console.log(`💰 Base Amount: ${config.BASE_AMOUNT} ETH (${baseAmountWei} wei)`);
       
       // Store payment reference for verification

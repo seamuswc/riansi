@@ -47,6 +47,22 @@ class ThaiLearningBot {
       this.handlePaymentWebhook(req, res);
     });
 
+    // Base/Ethereum payment redirect endpoint (Telegram doesn't support ethereum:// protocol)
+    this.app.get('/pay/base', (req, res) => {
+      const { address, amount, ref } = req.query;
+      
+      if (!address || !amount) {
+        return res.status(400).send('Missing required parameters');
+      }
+      
+      // Create EIP-681 format deep link
+      const ethereumLink = `ethereum:${address}@8453/transfer?value=${amount}`;
+      
+      // Redirect to ethereum:// link
+      // This will attempt to open the user's Ethereum wallet
+      res.redirect(ethereumLink);
+    });
+
 
 
 
