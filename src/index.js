@@ -3,6 +3,7 @@ const path = require('path');
 const TelegramBotHandler = require('./telegramBot');
 const Scheduler = require('./scheduler');
 const config = require('./config');
+const nodemailer = require('nodemailer');
 
 class ThaiLearningBot {
   constructor() {
@@ -18,8 +19,12 @@ class ThaiLearningBot {
   }
 
   setupExpress() {
-    // Parse JSON bodies
+    // Parse JSON bodies and URL-encoded bodies
     this.app.use(express.json());
+    this.app.use(express.urlencoded({ extended: true }));
+    
+    // Trust proxy for IP address (if behind reverse proxy)
+    this.app.set('trust proxy', true);
     
     // Serve static landing page
     this.app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -47,38 +52,9 @@ class ThaiLearningBot {
       this.handlePaymentWebhook(req, res);
     });
 
-    // Base/Ethereum payment redirect endpoint (Telegram doesn't support ethereum:// protocol)
-    // Use HTML meta redirect to attempt opening wallet
-    this.app.get('/pay/base', (req, res) => {
-      const { address, amount, ref } = req.query;
-      
-      if (!address || !amount) {
-        return res.status(400).send('Missing required parameters');
-      }
-      
-      // Create EIP-681 format deep link
-      const ethereumLink = `ethereum:${address}@8453/transfer?value=${amount}`;
-      
-      // Send HTML page with meta redirect and JavaScript fallback
-      // This attempts to open the wallet on mobile devices
-      res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>Opening Wallet...</title>
-          <meta http-equiv="refresh" content="0;url=${ethereumLink}">
-        </head>
-        <body>
-          <p>Opening your wallet...</p>
-          <p>If it doesn't open automatically, <a href="${ethereumLink}">click here</a></p>
-          <script>
-            window.location.href = "${ethereumLink}";
-          </script>
-        </body>
-        </html>
-      `);
+    // Contact form endpoint
+    this.app.post('/api/contact', (req, res) => {
+      this.handleContactForm(req, res);
     });
 
 
@@ -119,6 +95,63 @@ class ThaiLearningBot {
     } catch (error) {
       console.error('❌ Payment webhook error:', error);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  // Handle contact form submission
+  async handleContactForm(req, res) {
+    try {
+      const { message } = req.body;
+      
+      if (!message || !message.trim()) {
+        return res.status(400).json({ error: 'Message is required' });
+      }
+
+      // Check if email is configured
+      if (!config.CONTACT_EMAIL || !config.SMTP_USER || !config.SMTP_PASS) {
+        console.error('❌ Email not configured - missing CONTACT_EMAIL, SMTP_USER, or SMTP_PASS');
+        return res.status(500).json({ error: 'Contact form is not configured. Please contact the administrator.' });
+      }
+
+      // Create email transporter
+      const transporter = nodemailer.createTransport({
+        host: config.SMTP_HOST,
+        port: config.SMTP_PORT,
+        secure: config.SMTP_PORT === 465, // true for 465, false for other ports
+        auth: {
+          user: config.SMTP_USER,
+          pass: config.SMTP_PASS
+        }
+      });
+
+      // Email content
+      const mailOptions = {
+        from: `"Thai Learning Bot Contact Form" <${config.SMTP_FROM}>`,
+        to: config.CONTACT_EMAIL,
+        subject: `📝 Contact Form Submission - ${new Date().toLocaleString()}`,
+        text: `New contact form submission from Thai Learning Bot website:\n\n${message}\n\n---\nSubmitted at: ${new Date().toISOString()}\nIP: ${req.ip || req.connection.remoteAddress}`,
+        html: `
+          <h2>New Contact Form Submission</h2>
+          <p><strong>Message:</strong></p>
+          <p style="white-space: pre-wrap; background: #f5f5f5; padding: 15px; border-radius: 5px;">${message.replace(/\n/g, '<br>')}</p>
+          <hr>
+          <p><small>Submitted at: ${new Date().toLocaleString()}<br>IP: ${req.ip || req.connection.remoteAddress}</small></p>
+        `
+      };
+
+      // Send email
+      await transporter.sendMail(mailOptions);
+      
+      console.log('📧 Contact form email sent successfully');
+      
+      res.json({ 
+        status: 'success', 
+        message: 'Message sent successfully' 
+      });
+      
+    } catch (error) {
+      console.error('❌ Contact form error:', error);
+      res.status(500).json({ error: 'Failed to send message. Please try again later.' });
     }
   }
 

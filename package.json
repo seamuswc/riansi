@@ -9,18 +9,26 @@
     "deploy": "./deploy.sh"
   },
   "dependencies": {
-    "node-telegram-bot-api": "^0.64.0",
-    "express": "^4.18.2",
-    "sqlite3": "^5.1.6",
-    "node-cron": "^3.0.3",
     "axios": "^1.6.2",
     "dotenv": "^16.3.1",
-    "fuse.js": "^7.0.0"
+    "express": "^4.18.2",
+    "fuse.js": "^7.0.0",
+    "node-cron": "^3.0.3",
+    "node-telegram-bot-api": "^0.64.0",
+    "nodemailer": "^6.10.1",
+    "sqlite3": "^5.1.6"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
   },
-  "keywords": ["telegram", "bot", "thai", "learning", "ton", "cryptocurrency"],
+  "keywords": [
+    "telegram",
+    "bot",
+    "thai",
+    "learning",
+    "ton",
+    "cryptocurrency"
+  ],
   "author": "Thai Learning Bot",
   "license": "MIT"
 }

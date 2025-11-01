@@ -81,6 +81,13 @@
     .kb .kbtn { font-size: 14px; padding: 8px 12px; border-radius: 10px; background: #eef1f7; border: 1px solid #e1e5ef; cursor: default; }
     .kb .krow { width: 100%; display: flex; gap: 8px; }
     .ex { color: #0b74ff; font-weight: 600; }
+    /* Contact form styles */
+    .contact-wrap { margin-top: 28px; background: #f5f7fb; border-radius: 16px; padding: 20px; border: 1px solid rgba(0,0,0,.06); }
+    .contact-wrap h2 { margin: 0 0 12px; font-size: 20px; }
+    .contact-wrap p { margin: 0 0 16px; font-size: 14px; color: #666; }
+    .contact-wrap textarea { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #e1e5ef; font-family: inherit; font-size: 14px; resize: vertical; box-sizing: border-box; background: white; color: #111; }
+    .contact-wrap textarea:focus { outline: none; border-color: #007bff; }
+    
     @media (prefers-color-scheme: dark) {
       .card { background: #0f1020; color: #f6f7fb; }
       p, .muted, .footer { color: #cfd3e3; }
@@ -90,6 +97,10 @@
       .from-user { background: #183a16; }
       .msg .meta { color: #adb3cf; }
       .kb .kbtn { background: #1b1f3a; border-color: #24294d; color: #e3e6fb; }
+      .contact-wrap { background: #121428; border-color: #1c2040; }
+      .contact-wrap p { color: #cfd3e3; }
+      .contact-wrap textarea { background: #0f1020; color: #f6f7fb; border-color: #1c2040; }
+      .contact-wrap textarea:focus { border-color: #007bff; }
     }
   </style>
 </head>
@@ -139,10 +150,84 @@
           </div>
         </div>
       </div>
+
+      <!-- Contact Form -->
+      <div class="contact-wrap">
+        <h2>📝 Contact Us</h2>
+        <p>Have a comment, bug report, or complaint? We'd love to hear from you!</p>
+        <form id="contact-form">
+          <textarea 
+            id="contact-message" 
+            name="message" 
+            rows="4" 
+            placeholder="Enter your message, bug report, or feedback here..."
+            required
+          ></textarea>
+          <button 
+            type="submit" 
+            id="contact-submit"
+            class="btn btn-primary"
+            style="margin-top: 12px; width: 100%;"
+          >
+            Send Message
+          </button>
+          <div id="contact-status" style="margin-top: 12px; font-size: 14px; display: none;"></div>
+        </form>
+      </div>
     </main>
   </div>
   <script>
     document.getElementById('y').textContent = new Date().getFullYear();
+    
+    // Contact form handler
+    document.getElementById('contact-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const message = document.getElementById('contact-message').value;
+      const submitBtn = document.getElementById('contact-submit');
+      const statusDiv = document.getElementById('contact-status');
+      
+      if (!message.trim()) {
+        statusDiv.textContent = 'Please enter a message.';
+        statusDiv.style.display = 'block';
+        statusDiv.style.color = '#dc3545';
+        return;
+      }
+      
+      // Disable button and show loading
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+      statusDiv.style.display = 'none';
+      
+      try {
+        const response = await fetch('/api/contact', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message: message.trim() })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          statusDiv.textContent = '✅ Message sent successfully! Thank you for your feedback.';
+          statusDiv.style.color = '#28a745';
+          statusDiv.style.display = 'block';
+          document.getElementById('contact-message').value = '';
+        } else {
+          statusDiv.textContent = '❌ Error: ' + (data.error || 'Failed to send message. Please try again.');
+          statusDiv.style.color = '#dc3545';
+          statusDiv.style.display = 'block';
+        }
+      } catch (error) {
+        statusDiv.textContent = '❌ Error: Failed to send message. Please try again.';
+        statusDiv.style.color = '#dc3545';
+        statusDiv.style.display = 'block';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Message';
+      }
+    });
   </script>
 </body>
 </html>

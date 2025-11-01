@@ -20,10 +20,6 @@ module.exports = {
   USDT_CONTRACT_ADDRESS: process.env.USDT_CONTRACT_ADDRESS || 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', // Native USDT on TON
   USDT_AMOUNT: parseFloat(process.env.USDT_AMOUNT) || 1.0, // $1.00 USDT
   
-  // Base/Ethereum Configuration
-  BASE_ADDRESS: process.env.BASE_ADDRESS || '0x0040a6a1A835A6265201A178a939b5B1749CD9cA',
-  BASE_AMOUNT: parseFloat(process.env.BASE_AMOUNT) || 0.01, // 0.01 ETH on Base
-  
   // Database
   DATABASE_PATH: process.env.DATABASE_PATH || './data/bot.db',
   
@@ -52,5 +48,15 @@ module.exports = {
     GOOD: 70,
     FAIR: 50,
     POOR: 30
-  }
+  },
+  
+  // Contact Form Email Configuration
+  CONTACT_EMAIL: process.env.CONTACT_EMAIL || '', // Your email address (hidden from frontend)
+  
+  // Email Service Configuration (using SMTP - Gmail example)
+  SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
+  SMTP_PORT: parseInt(process.env.SMTP_PORT) || 587,
+  SMTP_USER: process.env.SMTP_USER || '', // Your email address for SMTP
+  SMTP_PASS: process.env.SMTP_PASS || '', // Your email app password
+  SMTP_FROM: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@riansi.xyz'
 };
