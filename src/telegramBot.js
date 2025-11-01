@@ -299,13 +299,26 @@ class TelegramBotHandler {
       console.log(`🔗 TON USDT Deep Link: ${tonUsdtDeepLink}`);
       
       // Store payment reference for verification (store both amounts)
+      // Use an array to store multiple pending payments per user to prevent clashes
       this.pendingPayments = this.pendingPayments || new Map();
-      this.pendingPayments.set(userId.toString(), {
+      
+      // Get existing pending payments for this user (if any)
+      const existingPayments = this.pendingPayments.get(userId.toString()) || [];
+      
+      // Add new payment to the array
+      const newPayment = {
         reference: paymentReference,
         amount: tonAmountNano,
         tonAmount: tonAmountForUSD,
+        usdtAmount: usdtAmount,
         timestamp: Date.now()
-      });
+      };
+      
+      // Keep only the 3 most recent pending payments per user (to prevent memory issues)
+      existingPayments.push(newPayment);
+      const recentPayments = existingPayments.slice(-3);
+      
+      this.pendingPayments.set(userId.toString(), recentPayments);
       
       // Format price message with $1 USD equivalent
       const priceMessage = await priceService.formatPriceMessage(tonAmountForUSD, config.USDT_AMOUNT);
@@ -474,8 +487,17 @@ ${priceMessage}
         return;
       }
       
-      const paymentData = this.pendingPayments.get(userId.toString());
-      console.log(`🔍 Checking payment: ${paymentData.reference}`);
+      const pendingPaymentsList = this.pendingPayments.get(userId.toString());
+      
+      // Check if it's an array (new format) or object (old format) for backwards compatibility
+      const paymentsToCheck = Array.isArray(pendingPaymentsList) ? pendingPaymentsList : [pendingPaymentsList];
+      
+      if (paymentsToCheck.length === 0) {
+        await this.bot.sendMessage(chatId, '❌ No pending payment found. Please try subscribing again.');
+        return;
+      }
+      
+      console.log(`🔍 Checking ${paymentsToCheck.length} pending payment(s) for user ${userId}`);
       
       // Send checking message
       await this.bot.sendMessage(chatId, '🔍 Checking your payment... Please wait a moment.');
@@ -488,7 +510,7 @@ ${priceMessage}
             'Authorization': `Bearer ${config.TON_API_KEY}`
           },
           params: {
-            limit: 10
+            limit: 20 // Increased to check more transactions
           }
         });
         
@@ -497,93 +519,105 @@ ${priceMessage}
         // Look for payment with matching reference
         const transactions = response.data.transactions || [];
         let paymentFound = false;
+        let foundPaymentData = null;
         
-        console.log(`🔍 Searching ${transactions.length} transactions for reference: ${paymentData.reference}`);
+        console.log(`🔍 Searching ${transactions.length} transactions for payments...`);
         
-        for (const tx of transactions) {
-          // Check in_msg for text comment
-          if (tx.in_msg && tx.in_msg.decoded_body && tx.in_msg.decoded_body.text) {
-            const messageText = tx.in_msg.decoded_body.text;
-            console.log(`📝 Checking transaction message: ${messageText}`);
-            if (messageText.includes(paymentData.reference)) {
-              console.log(`✅ Payment found in in_msg: ${paymentData.reference}`);
-              paymentFound = true;
-              break;
-            }
-          }
+        // Check all pending payments in reverse order (most recent first)
+        for (const paymentData of paymentsToCheck.reverse()) {
+          console.log(`🔍 Checking payment reference: ${paymentData.reference}`);
           
-          // Check out_msgs for text comment
-          if (tx.out_msgs && tx.out_msgs.length > 0) {
-            for (const outMsg of tx.out_msgs) {
-              if (outMsg.decoded_body && outMsg.decoded_body.text) {
-                const messageText = outMsg.decoded_body.text;
-                console.log(`📤 Checking out_msg: ${messageText}`);
-                if (messageText.includes(paymentData.reference)) {
-                  console.log(`✅ Payment found in out_msg: ${paymentData.reference}`);
-                  paymentFound = true;
-                  break;
+          // Check TON transactions first
+          for (const tx of transactions) {
+            // Check in_msg for text comment (TON payment)
+            if (tx.in_msg && tx.in_msg.decoded_body && tx.in_msg.decoded_body.text) {
+              const messageText = tx.in_msg.decoded_body.text;
+              // Use exact match to prevent substring clashes
+              if (messageText === paymentData.reference || messageText.includes(paymentData.reference)) {
+                console.log(`✅ TON Payment found in in_msg: ${paymentData.reference}`);
+                paymentFound = true;
+                foundPaymentData = paymentData;
+                break;
+              }
+            }
+            
+            // Check out_msgs for text comment
+            if (tx.out_msgs && tx.out_msgs.length > 0) {
+              for (const outMsg of tx.out_msgs) {
+                if (outMsg.decoded_body && outMsg.decoded_body.text) {
+                  const messageText = outMsg.decoded_body.text;
+                  // Use exact match to prevent substring clashes
+                  if (messageText === paymentData.reference || messageText.includes(paymentData.reference)) {
+                    console.log(`✅ TON Payment found in out_msg: ${paymentData.reference}`);
+                    paymentFound = true;
+                    foundPaymentData = paymentData;
+                    break;
+                  }
                 }
               }
+            }
+            
+            if (paymentFound) break;
+          }
+          
+          // If TON payment not found, check TON USDT Jetton
+          if (!paymentFound) {
+            try {
+              console.log(`🔍 Checking TON USDT Jetton transactions for reference: ${paymentData.reference}`);
+              
+              // Check for Jetton transfers in TON transactions
+              for (const tx of transactions) {
+                // Check if transaction has Jetton transfers
+                if (tx.out_msgs && tx.out_msgs.length > 0) {
+                  for (const outMsg of tx.out_msgs) {
+                    // Check if this is a Jetton transfer
+                    if (outMsg.source && outMsg.destination && outMsg.decoded_body) {
+                      const body = outMsg.decoded_body;
+                      
+                      // Check if it's a Jetton transfer with our USDT contract
+                      if (body.jetton_transfer && 
+                          body.jetton_transfer.jetton_master_address === config.USDT_CONTRACT_ADDRESS) {
+                        
+                        // Check amount (1 USDT = 1,000,000 microUSDT)
+                        const expectedAmount = Math.floor(config.USDT_AMOUNT * 1000000);
+                        const receivedAmount = parseInt(body.jetton_transfer.amount);
+                        
+                        console.log(`💰 Jetton transfer: received ${receivedAmount} microUSDT (expected ${expectedAmount})`);
+                        
+                        // Check if amount matches and message contains reference
+                        if (receivedAmount >= expectedAmount && 
+                            body.jetton_transfer.forward_ton_amount && 
+                            body.jetton_transfer.forward_payload) {
+                          
+                          // Check the forward payload for our reference (use exact match when possible)
+                          const payload = body.jetton_transfer.forward_payload;
+                          if (payload && (payload.includes(paymentData.reference) || payload === paymentData.reference)) {
+                            console.log(`✅ TON USDT Jetton Payment found: ${paymentData.reference}`);
+                            paymentFound = true;
+                            foundPaymentData = paymentData;
+                            break;
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                
+                if (paymentFound) break;
+              }
+            } catch (usdtError) {
+              console.log('⚠️ TON USDT Jetton check error:', usdtError.message);
             }
           }
           
           if (paymentFound) break;
         }
         
-        // If TON payment not found, check TON USDT Jetton
-        if (!paymentFound) {
-          try {
-            console.log('🔍 Checking TON USDT Jetton transactions...');
-            
-            // Check for Jetton transfers in TON transactions
-            for (const tx of transactions) {
-              // Check if transaction has Jetton transfers
-              if (tx.out_msgs && tx.out_msgs.length > 0) {
-                for (const outMsg of tx.out_msgs) {
-                  // Check if this is a Jetton transfer
-                  if (outMsg.source && outMsg.destination && outMsg.decoded_body) {
-                    const body = outMsg.decoded_body;
-                    
-                    // Check if it's a Jetton transfer with our USDT contract
-                    if (body.jetton_transfer && 
-                        body.jetton_transfer.jetton_master_address === config.USDT_CONTRACT_ADDRESS) {
-                      
-                      // Check amount (1 USDT = 1,000,000 microUSDT)
-                      const expectedAmount = Math.floor(config.USDT_AMOUNT * 1000000);
-                      const receivedAmount = parseInt(body.jetton_transfer.amount);
-                      
-                      console.log(`💰 Jetton transfer: received ${receivedAmount} microUSDT (expected ${expectedAmount})`);
-                      
-                      // Check if amount matches and message contains reference
-                      if (receivedAmount >= expectedAmount && 
-                          body.jetton_transfer.forward_ton_amount && 
-                          body.jetton_transfer.forward_payload) {
-                        
-                        // Check the forward payload for our reference
-                        const payload = body.jetton_transfer.forward_payload;
-                        if (payload.includes(paymentData.reference)) {
-                          console.log(`✅ TON USDT Jetton Payment found: ${paymentData.reference}`);
-                          paymentFound = true;
-                          break;
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-              
-              if (paymentFound) break;
-            }
-          } catch (usdtError) {
-            console.log('⚠️ TON USDT Jetton check error:', usdtError.message);
-          }
-        }
-        
-        if (paymentFound) {
+        if (paymentFound && foundPaymentData) {
           // Payment confirmed - create subscription
-          await database.createSubscription(userId.toString(), paymentData.reference, config.SUBSCRIPTION_DAYS);
+          await database.createSubscription(userId.toString(), foundPaymentData.reference, config.SUBSCRIPTION_DAYS);
           
-          // Remove from pending payments
+          // Remove ALL pending payments for this user (payment confirmed)
           this.pendingPayments.delete(userId.toString());
           
           // Send success message
