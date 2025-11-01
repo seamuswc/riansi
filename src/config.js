@@ -22,7 +22,7 @@ module.exports = {
   
   // Solana/Phantom Configuration
   SOLANA_ADDRESS: process.env.SOLANA_ADDRESS || '8zS5w8MHSDQ4Pc12DZRLYQ78hgEwnBemVJMrfjUN6xXj',
-  SOLANA_AMOUNT: parseFloat(process.env.SOLANA_AMOUNT) || 1.0, // 1 SOL
+  SOLANA_AMOUNT: parseFloat(process.env.SOLANA_AMOUNT) || 0.01, // 0.01 SOL
   
   // Database
   DATABASE_PATH: process.env.DATABASE_PATH || './data/bot.db',

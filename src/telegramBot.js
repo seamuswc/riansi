@@ -273,13 +273,12 @@ class TelegramBotHandler {
       // Generate payment links
       const tonAmount = Math.floor(config.TON_AMOUNT * 1000000000); // Convert to nanoTON
       const usdtAmount = Math.floor(config.USDT_AMOUNT * 1000000); // Convert to microUSDT (6 decimals)
-      const solAmount = Math.floor(config.SOLANA_AMOUNT * 1000000000); // Convert to lamports (1 SOL = 1,000,000,000 lamports)
       const paymentReference = `thai-bot-${userId}-${Date.now()}`;
       
       console.log(`💎 Creating payment links for user ${userId}`);
       console.log(`💰 TON Amount: ${config.TON_AMOUNT} TON (${tonAmount} nanoTON)`);
       console.log(`💰 USDT Amount: ${config.USDT_AMOUNT} USDT (${usdtAmount} microUSDT)`);
-      console.log(`💰 SOL Amount: ${config.SOLANA_AMOUNT} SOL (${solAmount} lamports)`);
+      console.log(`💰 SOL Amount: ${config.SOLANA_AMOUNT} SOL`);
       console.log(`🔗 Reference: ${paymentReference}`);
       
       // Create TON deep link
@@ -291,9 +290,8 @@ class TelegramBotHandler {
       console.log(`🔗 TON USDT Deep Link: ${tonUsdtDeepLink}`);
       
       // Create Solana/Phantom deep link - use https format (Telegram doesn't support solana:// protocol)
-      // Using Phantom universal link format that pre-fills payment screen
-      // Format: https://phantom.app/ul/v1/send?recipient=ADDRESS&amount=AMOUNT&memo=MEMO
-      const solanaDeepLink = `https://phantom.app/ul/v1/send?recipient=${config.SOLANA_ADDRESS}&amount=${solAmount}&memo=${encodeURIComponent(paymentReference)}`;
+      // Format: https://phantom.app/ul/send?recipient=ADDRESS&amount=AMOUNT (amount in SOL, not lamports)
+      const solanaDeepLink = `https://phantom.app/ul/send?recipient=${config.SOLANA_ADDRESS}&amount=${config.SOLANA_AMOUNT}&memo=${encodeURIComponent(paymentReference)}`;
       console.log(`🔗 Solana Deep Link: ${solanaDeepLink}`);
       
       // Store payment reference for verification
@@ -310,7 +308,7 @@ class TelegramBotHandler {
           inline_keyboard: [
             [{ text: '💎 Pay 1 TON', url: tonDeepLink }],
             [{ text: '💵 Pay 1 USDT (TON)', url: tonUsdtDeepLink }],
-            [{ text: '🟣 Pay 1 SOL (Phantom)', url: solanaDeepLink }],
+            [{ text: '🟣 Pay 0.01 SOL (Phantom)', url: solanaDeepLink }],
             [{ text: '✅ I Paid', callback_data: `check_payment_${userId}` }],
             [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
           ]
@@ -319,7 +317,7 @@ class TelegramBotHandler {
       
       const message = `💎 Subscribe to Thai Learning Bot
 
-💰 Cost: 1 TON (≈ $2.50), 1 USDT (≈ $1.00), or 1 SOL (≈ $150)    
+💰 Cost: 1 TON (≈ $2.50), 1 USDT (≈ $1.00), or 0.01 SOL (≈ $1.50)    
 📅 Duration: 30 days of daily lessons        
 🎯 What you get:
 • Daily Thai lessons
