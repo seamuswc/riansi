@@ -824,9 +824,9 @@ Practice writing the Thai sentence!`;
       // Fallback sentence
       const fallbackSentences = {
         1: { thai_text: 'สวัสดี', english_translation: 'Hello', word_breakdown: ['สวัสดี'] },
-        2: { thai_text: 'ฉันชื่อจอห์น', english_translation: 'My name is John', word_breakdown: ['ฉัน', 'ชื่อ', 'จอห์น'] },
+        2: { thai_text: 'ผมชื่อจอห์น', english_translation: 'My name is John', word_breakdown: ['ผม', 'ชื่อ', 'จอห์น'] },
         3: { thai_text: 'วันนี้อากาศดีมาก', english_translation: 'The weather is very nice today', word_breakdown: ['วันนี้', 'อากาศ', 'ดี', 'มาก'] },
-        4: { thai_text: 'ฉันชอบอ่านหนังสือในห้องสมุด', english_translation: 'I like reading books in the library', word_breakdown: ['ฉัน', 'ชอบ', 'อ่าน', 'หนังสือ', 'ใน', 'ห้องสมุด'] },
+        4: { thai_text: 'ผมชอบอ่านหนังสือในห้องสมุด', english_translation: 'I like reading books in the library', word_breakdown: ['ผม', 'ชอบ', 'อ่าน', 'หนังสือ', 'ใน', 'ห้องสมุด'] },
         5: { thai_text: 'ประเทศไทยเป็นประเทศที่มีวัฒนธรรมที่สวยงามและมีประวัติศาสตร์ที่ยาวนาน', english_translation: 'Thailand is a country with beautiful culture and long history', word_breakdown: ['ประเทศไทย', 'เป็น', 'ประเทศ', 'ที่', 'มี', 'วัฒนธรรม', 'ที่', 'สวยงาม', 'และ', 'มี', 'ประวัติศาสตร์', 'ที่', 'ยาวนาน'] }
       };
       return fallbackSentences[difficultyLevel] || fallbackSentences[1];

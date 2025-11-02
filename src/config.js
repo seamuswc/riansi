@@ -13,7 +13,6 @@ module.exports = {
   
   // TON Configuration
   TON_ADDRESS: process.env.TON_ADDRESS || 'UQBDTEPa2TsufNyTFvpydJH07AlOt48cB7Nyq6rFZ7p6e-wt',
-  TON_AMOUNT: parseFloat(process.env.TON_AMOUNT) || 1.0,
   SUBSCRIPTION_DAYS: parseInt(process.env.SUBSCRIPTION_DAYS) || 30,
   
   // TON Native USDT Configuration (Jetton)

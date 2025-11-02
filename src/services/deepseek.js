@@ -50,11 +50,12 @@ class DeepSeekService {
       - Include English translation
       - Be appropriate for the difficulty level
       
+      IMPORTANT LANGUAGE NOTE: When using "I" (first person singular), default to "ผม" (phom) - the male/polite form of "I", rather than "ฉัน" (chan). Use "ผม" unless the context specifically requires "ฉัน".
       
       For word_breakdown, provide an array of objects with:
       - word: the individual Thai word (break down into separate words, not phrases)
       - meaning: English meaning
-      - pinyin: Thai romanization/pronunciation (MUST include this field with proper Thai romanization like "chan", "chop", "gin", etc.)
+      - pinyin: Thai romanization/pronunciation (MUST include this field with proper Thai romanization like "phom", "chop", "gin", etc.)
       
       IMPORTANT: Break down into individual words. For example:
       - "ดื่มกาแฟ" (drinking coffee) should be broken down as "ดื่ม" (drink) + "กาแฟ" (coffee)
