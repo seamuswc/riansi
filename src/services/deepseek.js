@@ -1,5 +1,6 @@
 const axios = require('axios');
 const config = require('../config');
+const database = require('../database');
 
 class DeepSeekService {
   constructor() {
@@ -43,12 +44,22 @@ class DeepSeekService {
     console.log(`🔄 Generating new sentence for difficulty ${difficultyLevel}`);
     
     try {
+      // Get recent sentences to avoid duplicates
+      const recentSentences = await database.getRecentSentences(difficultyLevel, 30);
+      const recentThaiTexts = recentSentences.map(s => s.thai_text).filter(Boolean);
+      
+      let avoidPrompt = '';
+      if (recentThaiTexts.length > 0) {
+        avoidPrompt = `\n\nCRITICAL: Do NOT generate any of these sentences that were recently used:\n${recentThaiTexts.slice(0, 10).map((text, i) => `${i + 1}. ${text}`).join('\n')}\n\nYou MUST create a completely different sentence with different words, topics, and structure. Do not repeat similar phrases or patterns.`;
+      }
+      
       const levelInfo = config.DIFFICULTY_LEVELS[difficultyLevel];
       const prompt = `Generate a Thai sentence for language learning at ${levelInfo.name} level (${levelInfo.description}). 
       The sentence should be:
       - In Thai script
       - Include English translation
       - Be appropriate for the difficulty level
+      - Completely unique and different from previously generated sentences
       
       IMPORTANT LANGUAGE NOTE: When using "I" (first person singular), default to "ผม" (phom) - the male/polite form of "I", rather than "ฉัน" (chan). Use "ผม" unless the context specifically requires "ฉัน".
       
@@ -62,8 +73,11 @@ class DeepSeekService {
       - "ไปโรงเรียน" (go to school) should be broken down as "ไป" (go) + "โรงเรียน" (school)
       - "สวัสดีครับ" (hello sir) should be broken down as "สวัสดี" (hello) + "ครับ" (sir)
       
-      Try to not use similiar sentences over and over again.
-      Use a variety of sentences to keep the learning experience interesting.
+      CRITICAL REQUIREMENTS:
+      - Use a completely different topic, vocabulary, and sentence structure
+      - Vary the topics: try different activities, places, foods, emotions, weather, etc.
+      - Avoid repeating similar sentence patterns or word combinations
+      - Be creative and diverse in your sentence generation${avoidPrompt}
 
       Format the response as JSON with fields: thai_text, english_translation, word_breakdown`;
 
@@ -75,7 +89,7 @@ class DeepSeekService {
             content: prompt
           }
         ],
-        temperature: 0.7,
+        temperature: 0.9, // Increased from 0.7 for more variation
         max_tokens: 1500
       }, {
         headers: {
@@ -107,6 +121,22 @@ class DeepSeekService {
         // Validate that we have actual Thai text
         if (!parsed.thai_text || parsed.thai_text.trim() === '' || parsed.thai_text.includes('```')) {
           throw new Error('Invalid Thai text in response');
+        }
+        
+        // Check for duplicate sentences
+        const isDuplicate = recentThaiTexts.some(recentText => 
+          recentText.trim().toLowerCase() === parsed.thai_text.trim().toLowerCase()
+        );
+        
+        if (isDuplicate) {
+          console.log(`⚠️ Duplicate sentence detected: "${parsed.thai_text}"`);
+          if (retryCount < 3) {
+            console.log(`🔄 Retrying with different prompt (attempt ${retryCount + 1})...`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return this.generateThaiSentence(difficultyLevel, retryCount + 1);
+          } else {
+            console.log(`⚠️ Max retries reached, using sentence despite duplicate check`);
+          }
         }
         
         // Add pinyin if missing
