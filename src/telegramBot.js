@@ -270,7 +270,7 @@ class TelegramBotHandler {
         return;
       }
       
-      // Calculate TON amount for $1 USD (equivalent to USDT amount)
+      // Calculate TON amount for $1 USD
       let tonAmountForUSD = await priceService.getTonAmountForUSD(1.0);
       
       if (!tonAmountForUSD) {
@@ -280,22 +280,16 @@ class TelegramBotHandler {
         tonAmountForUSD = 1.0 / fallbackPrice; // ~0.4 TON for $1
       }
       
-      const usdtAmount = Math.floor(config.USDT_AMOUNT * config.TON_CONVERSIONS.MICRO_USDT_TO_USDT); // Convert to microUSDT (6 decimals)
       const tonAmountNano = Math.floor(tonAmountForUSD * config.TON_CONVERSIONS.NANO_TO_TON); // Convert to nanoTON
       const paymentReference = `thai-bot-${userId}-${Date.now()}`;
       
       console.log(`💎 Creating payment links for user ${userId}`);
       console.log(`💰 TON Amount: ${tonAmountForUSD.toFixed(4)} TON (≈ $1.00, ${tonAmountNano} nanoTON)`);
-      console.log(`💰 USDT Amount: ${config.USDT_AMOUNT} USDT (${usdtAmount} microUSDT)`);
       console.log(`🔗 Reference: ${paymentReference}`);
       
-      // Create TON deep link
+      // Create TON deep link for Tonkeeper
       const tonDeepLink = `ton://transfer/${config.TON_ADDRESS}?amount=${tonAmountNano}&text=${paymentReference}`;
       console.log(`🔗 TON Deep Link: ${tonDeepLink}`);
-      
-      // Create TON Native USDT deep link
-      const tonUsdtDeepLink = `ton://transfer/${config.TON_ADDRESS}?amount=${usdtAmount}&text=${paymentReference}&jetton=${config.USDT_CONTRACT_ADDRESS}`;
-      console.log(`🔗 TON USDT Deep Link: ${tonUsdtDeepLink}`);
       
       // Store payment reference for verification (store both amounts)
       // Use an array to store multiple pending payments per user to prevent clashes
@@ -308,7 +302,6 @@ class TelegramBotHandler {
         reference: paymentReference,
         amount: tonAmountNano,
         tonAmount: tonAmountForUSD,
-        usdtAmount: usdtAmount,
         timestamp: Date.now()
       };
       
@@ -318,21 +311,27 @@ class TelegramBotHandler {
       
       this.pendingPayments.set(userId.toString(), recentPayments);
       
-      // Format price message with $1 USD equivalent
-      const priceMessage = await priceService.formatPriceMessage(tonAmountForUSD, config.USDT_AMOUNT);
+      // Create Telegram Wallet Mini App link with TON Connect
+      const paymentAppUrl = `https://riansi.xyz/pay.html?address=${config.TON_ADDRESS}&amount=${tonAmountNano}&ton=${tonAmountForUSD.toFixed(4)}&ref=${encodeURIComponent(paymentReference)}&user=${userId}`;
+      console.log(`🔗 Payment App URL: ${paymentAppUrl}`);
       
       // Create payment buttons
-      const keyboard = this.createKeyboard([
-        [{ text: `💎 Pay ${tonAmountForUSD.toFixed(4)} TON (Tonkeeper)`, url: tonDeepLink }],
-        [{ text: '💵 Pay 1 USDT (Tonkeeper)', url: tonUsdtDeepLink }],
-        [{ text: '✅ I Paid', callback_data: `check_payment_${userId}` }],
-        [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
-      ]);
+      const keyboard = {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: `📱 Telegram Wallet (${tonAmountForUSD.toFixed(4)} TON)`, web_app: { url: paymentAppUrl } }],
+            [{ text: `💎 Tonkeeper (${tonAmountForUSD.toFixed(4)} TON)`, url: tonDeepLink }],
+            [{ text: '✅ I Paid', callback_data: `check_payment_${userId}` }],
+            [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+          ]
+        }
+      };
       
       const message = `💎 Subscribe to Thai Learning Bot
 
-${priceMessage}    
-📅 Duration: 30 days of daily lessons        
+💰 Cost: ${tonAmountForUSD.toFixed(4)} TON (≈ $1.00)
+📅 Duration: 30 days of daily lessons
+
 🎯 What you get:
 • Daily Thai lessons
 • Word-by-word breakdowns with pronunciation
@@ -752,11 +751,12 @@ ${priceMessage}
 
 ✅ You are now subscribed to Thai Learning Bot!
 📅 Your subscription is active for 30 days
-🎯 Daily lessons will be sent at 9:00 AM ICT
-
-Here's your first lesson:`;
+🎯 Daily lessons will be sent at 9:00 AM ICT`;
 
       await this.bot.sendMessage(chatId, successMessage);
+      
+      // Send immediate first lesson
+      await this.sendImmediateSentence(chatId, userId);
       
     } catch (error) {
       console.error('❌ Error in handlePaymentSuccess:', error);
