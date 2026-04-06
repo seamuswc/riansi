@@ -96,6 +96,30 @@ class PriceService {
   }
 
   /**
+   * Telegram Stars (XTR) count for a USD list price, aligned with TON-based ~$1 subscribe.
+   * Uses TON/USD from CoinGecko and STARS_PER_TON_HEURISTIC (Stars ≈ value of 1 TON in-app).
+   * Override with env SUBSCRIPTION_STARS for a fixed integer.
+   * @param {number} usdAmount
+   * @returns {Promise<number>}
+   */
+  async getStarsForUsd(usdAmount = 1) {
+    const config = require('../config');
+    if (config.SUBSCRIPTION_STARS_FIXED != null) {
+      return config.SUBSCRIPTION_STARS_FIXED;
+    }
+
+    const tonUsd = await this.getTonPriceUSD();
+    const starsPerTon = config.STARS_PER_TON_HEURISTIC;
+    const tonPrice = tonUsd || config.SUBSCRIPTION_STARS_TON_FALLBACK_USD;
+    if (!tonUsd) {
+      console.warn('⚠️ Stars pricing: using TON USD fallback for ~$1 Star count');
+    }
+
+    const tonsNeeded = usdAmount / tonPrice;
+    return Math.max(1, Math.round(tonsNeeded * starsPerTon));
+  }
+
+  /**
    * Format price message with real-time USD conversion
    * @param {number} tonAmount - Amount in TON
    * @param {number} usdtAmount - Amount in USDT (defaults to 1.0)

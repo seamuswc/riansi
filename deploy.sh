@@ -63,6 +63,10 @@ TON_API_KEY=your-ton-console-api-key
 # Webhook Configuration
 WEBHOOK_BASE_URL=https://riansi.xyz
 
+# Telegram Stars (optional — about 1 USD auto from TON price if unset)
+# SUBSCRIPTION_STARS=75
+# STARS_PER_TON_HEURISTIC=200
+
 # Database
 DATABASE_PATH=./data/bot.db
 

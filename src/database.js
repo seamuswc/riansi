@@ -157,6 +157,24 @@ class Database {
     });
   }
 
+  async findSubscriptionByPaymentReference(paymentReference) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT * FROM subscriptions
+        WHERE payment_reference = ?
+        ORDER BY created_at DESC LIMIT 1
+      `;
+      this.db.get(query, [paymentReference], (err, row) => {
+        if (err) {
+          console.error('❌ Database findSubscriptionByPaymentReference error:', err.message);
+          reject(err);
+        } else {
+          resolve(row || null);
+        }
+      });
+    });
+  }
+
   async createSubscription(telegramUserId, paymentReference, days = 30) {
     return new Promise((resolve, reject) => {
       const expiresAt = new Date();

@@ -14,6 +14,18 @@ module.exports = {
   // TON Configuration
   TON_ADDRESS: process.env.TON_ADDRESS || 'UQBDTEPa2TsufNyTFvpydJH07AlOt48cB7Nyq6rFZ7p6e-wt',
   SUBSCRIPTION_DAYS: parseInt(process.env.SUBSCRIPTION_DAYS) || 30,
+
+  // Telegram Stars: target ~$1 USD — computed from TON/USD (CoinGecko) × stars-per-TON heuristic, unless fixed below
+  SUBSCRIPTION_STARS_FIXED: (() => {
+    const v = process.env.SUBSCRIPTION_STARS;
+    if (v === undefined || String(v).trim() === '') return null;
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })(),
+  /** Approximate Stars valued like 1 TON in Telegram’s economy (tunable; used with TON USD spot for ~$1) */
+  STARS_PER_TON_HEURISTIC: parseInt(process.env.STARS_PER_TON_HEURISTIC, 10) || 200,
+  /** If TON price unavailable, assume this USD/TON (same order of magnitude as TON subscribe fallback) */
+  SUBSCRIPTION_STARS_TON_FALLBACK_USD: parseFloat(process.env.SUBSCRIPTION_STARS_TON_FALLBACK_USD) || 2.5,
   
   // TON Native USDT Configuration (Jetton)
   USDT_CONTRACT_ADDRESS: process.env.USDT_CONTRACT_ADDRESS || 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', // Native USDT on TON

@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
 const database = require('./database');
@@ -25,6 +26,7 @@ class TelegramBotHandler {
       // Payment tracking
       this.pendingPayments = new Map();
       this.checkingPayments = new Set();
+      this.pendingStarInvoices = new Map();
       
       this.setupEventHandlers();
       console.log('🤖 Thai Learning Bot started successfully');
@@ -74,7 +76,18 @@ class TelegramBotHandler {
       });
     });
     
-    // Note: TON payments use deep links, not Telegram Payments API
+    // Telegram Stars: pre-checkout must be answered within ~10s
+    this.bot.on('pre_checkout_query', (query) => {
+      this.handlePreCheckoutQuery(query).catch((err) => {
+        console.error('❌ pre_checkout_query handler error:', err);
+      });
+    });
+
+    this.bot.on('successful_payment', (msg) => {
+      this.handleSuccessfulStarsPayment(msg).catch((err) => {
+        console.error('❌ successful_payment handler error:', err);
+      });
+    });
     
     // Handle /start command
     this.bot.onText(/\/start/, (msg) => this.handleStart(msg));
@@ -134,7 +147,7 @@ class TelegramBotHandler {
       const welcomeMessage = `🇹🇭 Welcome to Thai Learning Bot!
 
 📖 Get daily Thai sentences and improve your language skills!
-💰 Subscribe with TON cryptocurrency for 30 days of lessons.
+💰 Subscribe with TON or Telegram Stars for 30 days of lessons.
 
 🎯 Choose your difficulty level and start learning!`;
 
@@ -152,7 +165,7 @@ class TelegramBotHandler {
 • Get daily Thai sentences at 9:00 AM ICT
 • Practice with authentic Thai content
 
-💰 Subscription: $1 USD for 30 days
+💰 Subscription: ~$1 USD in TON, or Telegram Stars (see bot), for 30 days
 🎯 Difficulty: 5 levels (Beginner to Expert)
 
 🎮 Use the buttons below to navigate!`;
@@ -184,7 +197,13 @@ class TelegramBotHandler {
           await this.handleStatus(chatId, userId);
           break;
         case 'subscribe':
-          await this.handleSubscribe(chatId, userId);
+          await this.handleSubscribeMenu(chatId, userId);
+          break;
+        case 'pay_ton':
+          await this.handleSubscribeTon(chatId, userId);
+          break;
+        case 'pay_stars':
+          await this.handleSubscribeStars(chatId, userId);
           break;
         case 'settings':
           await this.handleSettings(chatId, userId);
@@ -258,9 +277,206 @@ class TelegramBotHandler {
     }
   }
 
-  async handleSubscribe(chatId, userId) {
+  async handleSubscribeMenu(chatId, userId) {
     try {
-      console.log(`💎 Starting subscription process for user ${userId}`);
+      const existingSubscription = await database.getActiveSubscription(userId.toString());
+      if (existingSubscription) {
+        await this.bot.sendMessage(chatId, '✅ You already have an active subscription!');
+        return;
+      }
+
+      const keyboard = this.createKeyboard([
+        [{ text: '💎 Pay with TON', callback_data: 'pay_ton' }],
+        [{ text: '⭐ Pay with Telegram Stars', callback_data: 'pay_stars' }],
+        [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+      ]);
+
+      const starsNow = await priceService.getStarsForUsd(1);
+
+      await this.bot.sendMessage(
+        chatId,
+        `💳 Choose how to pay — 30 days of daily Thai lessons\n\n` +
+          `• TON — about $1 USD (Telegram Wallet or Tonkeeper)\n` +
+          `• Stars — about $1 USD (~${starsNow} ⭐ right now; follows TON/USD)`,
+        keyboard
+      );
+    } catch (error) {
+      console.error('❌ Error in handleSubscribeMenu:', error);
+      await this.bot.sendMessage(chatId, '❌ Sorry, something went wrong. Please try again.');
+    }
+  }
+
+  async handleSubscribeStars(chatId, userId) {
+    try {
+      const existingSubscription = await database.getActiveSubscription(userId.toString());
+      if (existingSubscription) {
+        await this.bot.sendMessage(chatId, '✅ You already have an active subscription!');
+        return;
+      }
+      await this.sendStarsInvoice(chatId, userId);
+    } catch (error) {
+      console.error('❌ Error in handleSubscribeStars:', error);
+      await this.bot.sendMessage(chatId, '❌ Could not create Stars invoice. Try again or use TON.');
+    }
+  }
+
+  /**
+   * Telegram Stars invoice — provider_token must be omitted (not sent) for XTR.
+   */
+  async sendStarsInvoice(chatId, userId) {
+    const nonce = crypto.randomBytes(8).toString('hex');
+    const stars = await priceService.getStarsForUsd(1);
+    const payload = `stars:${userId}:${nonce}:${stars}`;
+
+    this.pendingStarInvoices.set(String(userId), {
+      payload,
+      starsAmount: stars,
+      createdAt: Date.now()
+    });
+
+    const prices = JSON.stringify([{ label: '30-day Thai lessons', amount: stars }]);
+
+    await this.bot._request('sendInvoice', {
+      form: {
+        chat_id: chatId,
+        title: 'Thai Lessons — 30 days',
+        description: 'Riansi: digital subscription — daily Thai lessons for 30 days.',
+        payload,
+        currency: 'XTR',
+        prices,
+        start_parameter: 'riansi_sub'
+      }
+    });
+
+    console.log(`⭐ Stars invoice sent to user ${userId} (${stars} XTR)`);
+  }
+
+  async handlePreCheckoutQuery(query) {
+    const qid = query.id;
+
+    const reject = async (message) => {
+      await this.bot.answerPreCheckoutQuery(qid, false, { error_message: message });
+    };
+
+    try {
+      const payload = query.invoice_payload;
+      if (!payload || !payload.startsWith('stars:')) {
+        await reject('Invalid invoice.');
+        return;
+      }
+
+      const parts = payload.split(':');
+      if (parts.length !== 4) {
+        await reject('Invalid invoice.');
+        return;
+      }
+
+      const invoiceUserId = parts[1];
+      const expectedStars = parseInt(parts[3], 10);
+      if (!Number.isFinite(expectedStars) || expectedStars < 1) {
+        await reject('Invalid invoice.');
+        return;
+      }
+
+      if (String(query.from.id) !== invoiceUserId) {
+        await reject('This invoice is tied to another Telegram account.');
+        return;
+      }
+
+      if (query.currency !== 'XTR') {
+        await reject('Invalid currency.');
+        return;
+      }
+
+      if (Number(query.total_amount) !== expectedStars) {
+        await reject('Price mismatch. Tap Subscribe → Stars again for a fresh invoice.');
+        return;
+      }
+
+      const pending = this.pendingStarInvoices.get(invoiceUserId);
+      if (pending) {
+        if (pending.payload !== payload || pending.starsAmount !== expectedStars) {
+          await reject('Invoice expired. Open Subscribe → Pay with Stars again.');
+          return;
+        }
+        if (Date.now() - pending.createdAt > 3600000) {
+          this.pendingStarInvoices.delete(invoiceUserId);
+          await reject('Invoice expired. Please start checkout again.');
+          return;
+        }
+      }
+
+      const sub = await database.getActiveSubscription(invoiceUserId);
+      if (sub) {
+        await reject('You already have an active subscription.');
+        return;
+      }
+
+      await this.bot.answerPreCheckoutQuery(qid, true);
+    } catch (error) {
+      console.error('❌ handlePreCheckoutQuery:', error);
+      try {
+        await reject('Something went wrong. Please try again.');
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }
+
+  async handleSuccessfulStarsPayment(msg) {
+    const sp = msg.successful_payment;
+    if (!sp || sp.currency !== 'XTR') {
+      return;
+    }
+
+    const userId = msg.from.id;
+    const chatId = msg.chat.id;
+    const payload = sp.invoice_payload;
+
+    if (!payload || !payload.startsWith('stars:')) {
+      return;
+    }
+
+    const parts = payload.split(':');
+    if (parts.length !== 4 || parts[1] !== String(userId)) {
+      console.error('❌ Stars payload / user mismatch');
+      return;
+    }
+
+    const starCount = parseInt(parts[3], 10);
+    if (!Number.isFinite(starCount) || Number(sp.total_amount) !== starCount) {
+      console.error('❌ Stars total_amount mismatch');
+      return;
+    }
+
+    const chargeId = sp.telegram_payment_charge_id;
+    const existing = await database.findSubscriptionByPaymentReference(chargeId);
+    if (existing) {
+      console.log(`⚠️ Duplicate Stars payment ignored: ${chargeId}`);
+      return;
+    }
+
+    await database.createSubscription(String(userId), chargeId, config.SUBSCRIPTION_DAYS);
+    this.pendingStarInvoices.delete(String(userId));
+
+    console.log(`⭐ Stars payment OK user=${userId} charge=${chargeId}`);
+
+    const keyboard = this.createKeyboard([
+      [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+    ]);
+
+    await this.bot.sendMessage(
+      chatId,
+      '🎉 Payment confirmed with Telegram Stars! Subscription active for 30 days.',
+      keyboard
+    );
+
+    await this.sendImmediateSentence(chatId, userId);
+  }
+
+  async handleSubscribeTon(chatId, userId) {
+    try {
+      console.log(`💎 Starting TON subscription for user ${userId}`);
       
       // Check if user already has active subscription
       const existingSubscription = await database.getActiveSubscription(userId.toString());
@@ -343,7 +559,7 @@ class TelegramBotHandler {
       console.log(`✅ Payment link sent to user ${userId}`);
       
     } catch (error) {
-      console.error('❌ Error in handleSubscribe:', error);
+      console.error('❌ Error in handleSubscribeTon:', error);
       console.error('❌ Error details:', error.message);
       console.error('❌ Error stack:', error.stack);
       await this.bot.sendMessage(chatId, '❌ Sorry, something went wrong with payment. Please try again.');
@@ -727,7 +943,7 @@ class TelegramBotHandler {
       const welcomeMessage = `🇹🇭 Welcome to Thai Learning Bot!
 
 📖 Get daily Thai sentences and improve your language skills!
-💰 Subscribe with TON cryptocurrency for 30 days of lessons.
+💰 Subscribe with TON or Telegram Stars for 30 days of lessons.
 
 🎯 Choose your difficulty level and start learning!`;
 
