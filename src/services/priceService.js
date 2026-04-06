@@ -98,7 +98,7 @@ class PriceService {
   /**
    * Telegram Stars (XTR) count for a USD list price, aligned with TON-based ~$1 subscribe.
    * Uses TON/USD from CoinGecko and STARS_PER_TON_HEURISTIC (Stars ≈ value of 1 TON in-app).
-   * Override with env SUBSCRIPTION_STARS for a fixed integer.
+   * Uses config SUBSCRIPTION_STARS_FIXED (default 60; override with env SUBSCRIPTION_STARS).
    * @param {number} usdAmount
    * @returns {Promise<number>}
    */

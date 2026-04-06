@@ -297,7 +297,7 @@ class TelegramBotHandler {
         chatId,
         `💳 Choose how to pay — 30 days of daily Thai lessons\n\n` +
           `• TON — about $1 USD (Telegram Wallet or Tonkeeper)\n` +
-          `• Stars — about $1 USD (~${starsNow} ⭐ right now; follows TON/USD)`,
+          `• Stars — ${starsNow} ⭐`,
         keyboard
       );
     } catch (error) {

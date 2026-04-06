@@ -15,12 +15,12 @@ module.exports = {
   TON_ADDRESS: process.env.TON_ADDRESS || 'UQBDTEPa2TsufNyTFvpydJH07AlOt48cB7Nyq6rFZ7p6e-wt',
   SUBSCRIPTION_DAYS: parseInt(process.env.SUBSCRIPTION_DAYS) || 30,
 
-  // Telegram Stars: target ~$1 USD — computed from TON/USD (CoinGecko) × stars-per-TON heuristic, unless fixed below
+  // Telegram Stars (XTR): default 60 ⭐ per subscription; override with SUBSCRIPTION_STARS in .env
   SUBSCRIPTION_STARS_FIXED: (() => {
     const v = process.env.SUBSCRIPTION_STARS;
-    if (v === undefined || String(v).trim() === '') return null;
+    if (v === undefined || String(v).trim() === '') return 60;
     const n = parseInt(v, 10);
-    return Number.isFinite(n) && n > 0 ? n : null;
+    return Number.isFinite(n) && n > 0 ? n : 60;
   })(),
   /** Approximate Stars valued like 1 TON in Telegram’s economy (tunable; used with TON USD spot for ~$1) */
   STARS_PER_TON_HEURISTIC: parseInt(process.env.STARS_PER_TON_HEURISTIC, 10) || 200,
