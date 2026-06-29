@@ -1,5 +1,11 @@
 const axios = require('axios');
 
+const HOLDINGS = {
+  zec: 200,
+  goldOz: 30,
+  aave: 4000,
+};
+
 /**
  * Price Service - Fetches real-time cryptocurrency prices
  * Uses CoinGecko API (free, no API key required)
@@ -12,6 +18,76 @@ class PriceService {
       timestamp: 0,
       cacheDuration: 3600000 // Cache for 1 hour (3600000ms) to respect free tier limits
     };
+    this.portfolioCache = {
+      prices: null,
+      timestamp: 0,
+      cacheDuration: 3600000,
+    };
+  }
+
+  formatUsd(value) {
+    if (value == null || !Number.isFinite(value)) {
+      return '—';
+    }
+    return `$${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  }
+
+  /**
+   * ZEC, gold (via PAXG/oz proxy), AAVE — for post-subscribe portfolio snapshot
+   */
+  async getPortfolioPricesUSD() {
+    const now = Date.now();
+    if (
+      this.portfolioCache.prices &&
+      now - this.portfolioCache.timestamp < this.portfolioCache.cacheDuration
+    ) {
+      return this.portfolioCache.prices;
+    }
+
+    const response = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+      params: {
+        ids: 'zcash,aave,pax-gold',
+        vs_currencies: 'usd',
+      },
+      timeout: 8000,
+    });
+
+    const prices = {
+      zec: response.data.zcash?.usd,
+      aave: response.data.aave?.usd,
+      goldPerOz: response.data['pax-gold']?.usd,
+    };
+
+    if (!prices.zec || !prices.aave || !prices.goldPerOz) {
+      throw new Error('Incomplete portfolio prices from CoinGecko');
+    }
+
+    this.portfolioCache.prices = prices;
+    this.portfolioCache.timestamp = now;
+    return prices;
+  }
+
+  async formatPortfolioSnapshotMessage() {
+    const prices = await this.getPortfolioPricesUSD();
+    const zecValue = prices.zec * HOLDINGS.zec;
+    const goldValue = prices.goldPerOz * HOLDINGS.goldOz;
+    const aaveValue = prices.aave * HOLDINGS.aave;
+    const total = zecValue + goldValue + aaveValue;
+
+    const dateLabel = new Date().toLocaleDateString('en-GB', {
+      timeZone: 'Asia/Bangkok',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+
+    return (
+      `📊 Portfolio value (${dateLabel})\n\n` +
+      `ZEC × ${HOLDINGS.zec.toLocaleString('en-US')}: ${this.formatUsd(zecValue)}\n` +
+      `Gold × ${HOLDINGS.goldOz}: ${this.formatUsd(goldValue)}\n` +
+      `AAVE × ${HOLDINGS.aave.toLocaleString('en-US')}: ${this.formatUsd(aaveValue)}\n\n` +
+      `Total: ${this.formatUsd(total)}`
+    );
   }
 
   /**

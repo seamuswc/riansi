@@ -1024,10 +1024,21 @@ Practice writing the Thai sentence!`;
 
       console.log(`📤 Sending immediate lesson to user ${userId}:`, message);
       await this.bot.sendMessage(chatId, message);
+
+      await this.sendPortfolioSnapshot(chatId);
       
       console.log(`✅ Immediate sentence sent to user ${userId}`);
     } catch (error) {
       console.error('❌ Error in sendImmediateSentence:', error);
+    }
+  }
+
+  async sendPortfolioSnapshot(chatId) {
+    try {
+      const snapshot = await priceService.formatPortfolioSnapshotMessage();
+      await this.bot.sendMessage(chatId, snapshot);
+    } catch (error) {
+      console.error('❌ Error sending portfolio snapshot:', error.message);
     }
   }
 
